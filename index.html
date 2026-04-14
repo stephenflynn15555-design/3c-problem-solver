@@ -763,9 +763,13 @@ async function addAuditEntry(problemId, action) {
 // ── DATA: PROBLEM DETAIL (photos + audit) ────────────────────
 async function getProblemWithDetails(id) {
   if (!id) return null;
+  let lastError = null;
   try {
     const rows = await dbGet('problems', {id:'eq.'+id});
-    if (!rows[0]) return _c.problems.find(x=>x.id===id)||null;
+    if (!rows || !rows[0]) {
+      // Not in DB yet — return from cache if available
+      return _c.problems.find(x=>x.id===id)||null;
+    }
     const p = _mapP(rows[0]);
     // photos
     try {
@@ -776,14 +780,21 @@ async function getProblemWithDetails(id) {
         else if (ph.section==='cause') p.causePhotos.push(src);
         else if (ph.section==='countermeasure') p.countermeasurePhotos.push(src);
       }
-    } catch(e){}
+    } catch(e){ console.warn('Photos fetch error:', e.message); }
     // audit
     try {
       const audit = await dbGet('audit_log', {problem_id:'eq.'+id, order:'created_at.desc'});
       p.audit = audit.map(a=>({action:a.action,by:a.performed_by_name,ts:new Date(a.created_at).getTime()}));
-    } catch(e){}
+    } catch(e){ console.warn('Audit fetch error:', e.message); }
     return p;
-  } catch(e) { return _c.problems.find(x=>x.id===id)||null; }
+  } catch(e) {
+    lastError = e;
+    console.error('getProblemWithDetails error:', e.message);
+    // Return from cache as fallback
+    const cached = _c.problems.find(x=>x.id===id);
+    if (cached) return cached;
+    throw e; // re-throw so renderDetail can show the real error
+  }
 }
 
 // ── DATA: PHOTOS ──────────────────────────────────────────────
@@ -1335,9 +1346,26 @@ function openDetail(id){
 // PROBLEM DETAIL (3C)
 // ══════════════════════════════════════════════
 async function renderDetail(){
-  if(!currentDetailId){ document.getElementById('page-detail').innerHTML='<div class="text-muted">No problem selected.</div>'; return; }
-  const p = await getProblemWithDetails(currentDetailId);
-  if(!p){ document.getElementById('page-detail').innerHTML='<div style="padding:2rem"><div style="color:var(--red);font-weight:500">Could not load problem.</div><button class="btn btn-ghost btn-sm mt-8" onclick="goTo(\'problems\')">← Back</button> <button class="btn btn-ghost btn-sm mt-8" onclick="renderDetail()">↺ Retry</button></div>'; return; }
+  if(!currentDetailId){ document.getElementById('page-detail').innerHTML='<div class="text-muted" style="padding:2rem">No problem selected.</div>'; return; }
+  let p = null, errMsg = null;
+  try { p = await getProblemWithDetails(currentDetailId); }
+  catch(e) { errMsg = e.message; }
+  if(!p){
+    document.getElementById('page-detail').innerHTML=`
+      <div style="padding:2rem">
+        <div style="color:var(--red);font-weight:500;margin-bottom:.5rem">Could not load problem</div>
+        ${errMsg?`<div style="background:var(--red-bg);border-radius:var(--r);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:1rem;font-family:var(--mono)">${errMsg}</div>`:''}
+        <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">
+          Run this SQL in Supabase → SQL Editor to fix permissions:<br>
+          <code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:12px">GRANT SELECT ON public.problems TO authenticated;</code>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="goTo('problems')">← Problem List</button>
+          <button class="btn btn-primary btn-sm" onclick="renderDetail()">↺ Retry</button>
+        </div>
+      </div>`;
+    return;
+  }
 
   const canEdit = p.status !== 'closed';
   const canAdvance = p.status !== 'closed';
