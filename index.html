@@ -814,7 +814,8 @@ async function uploadPhoto(problemId, section, dataUrl) {
     console.error('Photo upload failed:', res.status, errText);
     return null;
   }
-  await dbPost('problem_photos', {problem_id:problemId,section,storage_path:path,uploaded_by:currentUser?.id||null}).catch(()=>{});
+  const insertRes = await dbPost('problem_photos', {problem_id:problemId,section,storage_path:path,uploaded_by:currentUser?.id||null});
+  if (!insertRes) console.warn('Photo DB insert may have failed for section:', section);
   return path;
 }
 
