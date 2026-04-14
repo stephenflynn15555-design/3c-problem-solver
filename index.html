@@ -819,6 +819,7 @@ async function uploadPhoto(problemId, section, dataUrl) {
 }
 
 async function deleteDetailPhoto(problemId, section, idx) {
+  if (!confirm('Delete this photo?')) return;
   try {
     const photos = await dbGet('problem_photos', {problem_id:'eq.'+problemId, section:'eq.'+section, order:'created_at'});
     if (photos[idx]) {
@@ -828,9 +829,18 @@ async function deleteDetailPhoto(problemId, section, idx) {
       await dbDel('problem_photos','id',photos[idx].id).catch(()=>{});
       await addAuditEntry(problemId,'Photo removed from '+section);
     }
-  } catch(e){}
-  window._activeDetailTab=sectionToTab(section);
-  renderDetail();
+    // Remove thumbnail from grid directly — no full re-render
+    const gridMap = {'concern':'concern-photos-grid','cause':'cause-photos-grid','cause-staff':'cause-staff-photos-grid','countermeasure':'counter-photos-grid'};
+    const grid = document.getElementById(gridMap[section]);
+    if (grid && grid.children[idx]) grid.children[idx].remove();
+    // Update cache
+    if (window._detailPhotoCache && window._detailPhotoCache[section]) {
+      window._detailPhotoCache[section].splice(idx, 1);
+    }
+    showNotif('Photo deleted.','success');
+  } catch(e){
+    showNotif('Delete failed: '+e.message,'error');
+  }
 }
 
 // Map section name to tab ID
@@ -846,18 +856,38 @@ function sectionToTab(section){
 
 async function addDetailPhoto(section, src) {
   if (!currentDetailId) return;
-  showNotif('Uploading photo…','');
+  showNotif('Uploading…','');
   const path = await uploadPhoto(currentDetailId, section, src);
   if (!path) {
-    showNotif('Photo upload failed — check Supabase storage bucket exists.','error');
-    window._activeDetailTab = sectionToTab(section);
-    renderDetail();
+    showNotif('Upload failed — check Supabase storage bucket is public.','error');
     return;
   }
   await addAuditEntry(currentDetailId, 'Photo added to '+section);
   showNotif('Photo saved.','success');
-  window._activeDetailTab = sectionToTab(section);
-  renderDetail();
+
+  // Inject photo directly into the grid — no full page re-render so form data is preserved
+  const gridMap = {
+    'concern': 'concern-photos-grid',
+    'cause': 'cause-photos-grid',
+    'cause-staff': 'cause-staff-photos-grid',
+    'countermeasure': 'counter-photos-grid'
+  };
+  const gridId = gridMap[section];
+  const grid = gridId && document.getElementById(gridId);
+  if (grid) {
+    const publicUrl = SB_URL+'/storage/v1/object/public/problem-photos/'+path;
+    const idx = grid.children.length;
+    const div = document.createElement('div');
+    div.className = 'photo-thumb';
+    div.onclick = () => openLightboxDirect(idx, section);
+    div.innerHTML = `<img src="${publicUrl}">
+      <button class="del-btn" onclick="event.stopPropagation();deleteDetailPhoto('${currentDetailId}','${section}',${idx})">✕</button>`;
+    grid.appendChild(div);
+    // Update cache so lightbox works immediately
+    if (!window._detailPhotoCache) window._detailPhotoCache = {};
+    if (!window._detailPhotoCache[section]) window._detailPhotoCache[section] = [];
+    window._detailPhotoCache[section].push(publicUrl);
+  }
 }
 
 // ── DATA: DEPTS / PROCESSES ───────────────────────────────────
