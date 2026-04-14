@@ -1,0 +1,3353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a5fb4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.json">
+<title>3C Problem Solver</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style type="text/css">
+:root{
+  --bg:#f4f5f7;--surface:#ffffff;--surface2:#f0f2f5;--surface3:#e8eaed;
+  --border:#dde1e7;--border2:#c4c9d4;
+  --text:#1a1d23;--text2:#5a6072;--text3:#9aa0b0;
+  --blue:#1a5fb4;--blue2:#2d7dd2;--blue-bg:#e8f0fb;--blue-light:#dbeafe;
+  --red:#c0392b;--red-bg:#fdecea;--red-light:#fee2e2;
+  --amber:#b45309;--amber-bg:#fef3c7;--amber-light:#fef9c3;
+  --green:#166534;--green-bg:#dcfce7;--green-light:#bbf7d0;
+  --grey:#374151;
+  --sans:'IBM Plex Sans',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+  --r:8px;--r2:12px;--r3:16px;
+  --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  --shadow2:0 4px 12px rgba(0,0,0,0.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+.hidden{display:none!important;}
+button,input,select,textarea{font-family:var(--sans);}
+a{color:var(--blue);text-decoration:none;}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
+
+/* ════════════════════════ LOGIN ════════════════════════ */
+#login-screen{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0f2647 0%,#1a5fb4 60%,#2d7dd2 100%);
+}
+.login-wrap{width:100%;max-width:400px;padding:1rem;}
+.login-card{
+  background:#fff;border-radius:var(--r3);padding:2.5rem;box-shadow:var(--shadow2);
+}
+.login-brand{display:flex;align-items:center;gap:10px;margin-bottom:2rem;}
+.login-brand-icon{
+  width:44px;height:44px;background:var(--blue);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:600;font-size:16px;font-family:var(--mono);
+}
+.login-brand-name{font-size:18px;font-weight:600;color:var(--text);}
+.login-brand-sub{font-size:12px;color:var(--text2);}
+.login-title{font-size:22px;font-weight:600;margin-bottom:.25rem;}
+.login-sub{font-size:13px;color:var(--text2);margin-bottom:1.75rem;}
+.field{margin-bottom:1rem;}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+.field input,.field select,.field textarea{
+  width:100%;padding:12px 14px;border-radius:var(--r);
+  border:1.5px solid var(--border);background:#fff;
+  color:var(--text);font-size:14px;transition:border-color .15s;
+}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue);}
+.field textarea{resize:vertical;min-height:90px;line-height:1.6;}
+.field select option{background:#fff;}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:13px 20px;border-radius:var(--r);font-size:14px;font-weight:500;
+  border:none;cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--text2);}
+.btn-ghost:hover{border-color:var(--border2);color:var(--text);background:var(--surface2);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-danger:hover{opacity:.9;}
+.btn-green{background:#16a34a;color:#fff;}
+.btn-green:hover{background:#15803d;}
+.btn-amber{background:#d97706;color:#fff;}
+.btn-sm{padding:8px 14px;font-size:13px;}
+.btn-lg{padding:16px 24px;font-size:15px;}
+.btn-full{width:100%;}
+.btn-icon{padding:10px;border-radius:var(--r);}
+.error-box{
+  background:var(--red-bg);border:1px solid #fca5a5;border-radius:var(--r);
+  padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:1rem;display:none;
+}
+.login-demo{margin-top:1.5rem;padding:1rem;background:var(--surface2);border-radius:var(--r);font-size:12px;color:var(--text2);line-height:1.8;}
+.login-demo strong{color:var(--text);}
+
+/* ════════════════════════ APP SHELL ════════════════════════ */
+#app{display:flex;height:100vh;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{
+  width:240px;background:var(--blue);flex-shrink:0;
+  display:flex;flex-direction:column;transition:width .2s;
+  overflow:hidden;
+}
+.sidebar-brand{
+  padding:1.25rem 1rem;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
+.sidebar-brand-icon{
+  width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:600;font-size:13px;font-family:var(--mono);flex-shrink:0;
+}
+.sidebar-brand-text{color:#fff;font-weight:600;font-size:15px;}
+.sidebar-brand-sub{color:rgba(255,255,255,.6);font-size:11px;}
+.sidebar-nav{flex:1;padding:.75rem 0;overflow-y:auto;}
+.nav-section{font-size:10px;font-weight:600;color:rgba(255,255,255,.4);
+  text-transform:uppercase;letter-spacing:.1em;padding:.5rem 1rem .25rem;margin-top:.5rem;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:10px 1rem;
+  color:rgba(255,255,255,.75);cursor:pointer;transition:all .12s;
+  border-left:3px solid transparent;font-size:14px;
+}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff;}
+.nav-item.active{background:rgba(255,255,255,.15);color:#fff;border-left-color:#fff;}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
+.nav-badge{
+  margin-left:auto;background:var(--red);color:#fff;font-size:10px;
+  font-weight:600;padding:2px 6px;border-radius:99px;min-width:18px;text-align:center;
+}
+.sidebar-user{
+  padding:1rem;border-top:1px solid rgba(255,255,255,.12);
+  display:flex;align-items:center;gap:10px;
+}
+.user-avatar{
+  width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:600;font-size:13px;flex-shrink:0;
+}
+.user-name{color:#fff;font-size:13px;font-weight:500;}
+.user-role{color:rgba(255,255,255,.6);font-size:11px;}
+.logout-btn{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:18px;padding:4px;}
+.logout-btn:hover{color:#fff;}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.topbar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:.75rem 1.5rem;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:40;
+}
+.topbar-title{font-size:17px;font-weight:600;}
+.topbar-sub{font-size:12px;color:var(--text2);margin-left:auto;}
+.content{padding:1.5rem;flex:1;}
+.page{display:none;}
+.page.active{display:block;}
+
+/* CARDS */
+.card{background:var(--surface);border-radius:var(--r2);border:1px solid var(--border);box-shadow:var(--shadow);}
+.card-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.card-title{font-size:15px;font-weight:600;}
+.card-body{padding:1.25rem;}
+.card-body-p0{padding:0;}
+
+/* STATUS PILLS */
+.pill{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;}
+.pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.pill-new{background:#e0e7ff;color:#3730a3;}
+.pill-validated{background:var(--blue-bg);color:#1e40af;}
+.pill-cause{background:var(--amber-bg);color:#92400e;}
+.pill-counter{background:#fce7f3;color:#9d174d;}
+.pill-closed{background:var(--green-bg);color:var(--green);}
+.pill-open{background:var(--amber-bg);color:#92400e;}
+.pill-progress{background:var(--blue-bg);color:#1e40af;}
+.pill-complete{background:var(--green-bg);color:var(--green);}
+.pill-overdue{background:var(--red-bg);color:var(--red);}
+
+/* SEVERITY */
+.sev-low{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+.sev-medium{background:var(--amber-bg);color:#92400e;border:1px solid #fde68a;}
+.sev-high{background:var(--red-bg);color:var(--red);border:1px solid #fca5a5;}
+
+/* CATEGORY */
+.cat-quality{background:#eff6ff;color:#1d4ed8;}
+.cat-safety{background:#fef2f2;color:#b91c1c;}
+.cat-downtime{background:#fff7ed;color:#c2410c;}
+.cat-cost{background:#f0fdf4;color:#15803d;}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem;}
+.stat-card{
+  background:var(--surface);border-radius:var(--r2);border:1px solid var(--border);
+  padding:1.25rem;box-shadow:var(--shadow);
+}
+.stat-val{font-size:32px;font-weight:600;font-family:var(--mono);line-height:1;}
+.stat-label{font-size:12px;color:var(--text2);margin-top:6px;text-transform:uppercase;letter-spacing:.04em;font-weight:500;}
+.stat-trend{font-size:12px;margin-top:6px;}
+.stat-blue{color:var(--blue);}
+.stat-red{color:var(--red);}
+.stat-amber{color:var(--amber);}
+.stat-green{color:var(--green);}
+
+/* TRAFFIC LIGHT */
+.tl-red{color:var(--red);}
+.tl-amber{color:var(--amber);}
+.tl-green{color:var(--green);}
+.bg-tl-red{background:var(--red-bg);}
+.bg-tl-amber{background:var(--amber-bg);}
+.bg-tl-green{background:var(--green-bg);}
+
+/* TABLES */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{
+  text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid var(--border);
+  background:var(--surface2);white-space:nowrap;
+}
+.data-table td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.data-table tbody tr{cursor:pointer;transition:background .1s;}
+.data-table tbody tr:hover{background:var(--surface2);}
+.data-table tbody tr:last-child td{border-bottom:none;}
+
+/* PROGRESS */
+.progress-wrap{height:6px;background:var(--surface3);border-radius:99px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--blue2));}
+
+/* FORM SECTIONS */
+.form-section{margin-bottom:1.5rem;}
+.form-section-title{
+  font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;
+  letter-spacing:.08em;margin-bottom:.75rem;display:flex;align-items:center;gap:8px;
+}
+.form-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.form-row{display:grid;gap:1rem;}
+.form-row-2{grid-template-columns:1fr 1fr;}
+.form-row-3{grid-template-columns:1fr 1fr 1fr;}
+
+/* TABS */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:1.5rem;gap:0;}
+.tab{
+  padding:10px 20px;font-size:14px;font-weight:500;color:var(--text2);
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:color .15s;white-space:nowrap;
+}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+/* 3C STEPS */
+.step-header{
+  display:flex;align-items:center;gap:12px;padding:1rem 1.25rem;
+  border-bottom:1px solid var(--border);background:var(--surface);
+  border-radius:var(--r2) var(--r2) 0 0;
+}
+.step-badge{
+  width:36px;height:36px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:14px;font-family:var(--mono);
+  flex-shrink:0;
+}
+.step-c1{background:var(--blue-bg);color:var(--blue);}
+.step-c2{background:var(--amber-bg);color:var(--amber);}
+.step-c3{background:var(--green-bg);color:var(--green);}
+.step-title{font-size:16px;font-weight:600;}
+.step-sub{font-size:12px;color:var(--text2);}
+
+/* WORKFLOW STEPPER */
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:1.5rem;overflow-x:auto;padding-bottom:4px;}
+.step-item{display:flex;align-items:center;flex-shrink:0;}
+.step-node{
+  display:flex;align-items:center;gap:8px;padding:8px 16px;
+  border-radius:var(--r);font-size:12px;font-weight:500;
+  background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);
+  white-space:nowrap;
+}
+.step-node.done{background:var(--green-bg);color:var(--green);border-color:#86efac;}
+.step-node.active{background:var(--blue-bg);color:var(--blue);border-color:#93c5fd;}
+.step-node.pending{opacity:.5;}
+.step-arrow{color:var(--text3);padding:0 4px;font-size:12px;}
+
+/* PHOTO */
+.photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.photo-thumb{
+  width:80px;height:80px;border-radius:var(--r);overflow:hidden;
+  border:1.5px solid var(--border);cursor:pointer;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;position:relative;
+}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;}
+.photo-thumb .del-btn{
+  position:absolute;top:2px;right:2px;width:18px;height:18px;
+  background:rgba(0,0,0,.6);border-radius:50%;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:10px;
+  cursor:pointer;opacity:0;transition:opacity .15s;border:none;
+}
+.photo-thumb:hover .del-btn{opacity:1;}
+.photo-add-btn{
+  width:80px;height:80px;border-radius:var(--r);
+  border:2px dashed var(--border2);background:transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--text3);gap:4px;font-size:11px;transition:all .15s;
+}
+.photo-add-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+.photo-add-btn .icon{font-size:20px;}
+
+/* LIGHTBOX */
+.lightbox{
+  position:fixed;inset:0;background:rgba(0,0,0,.88);
+  display:flex;align-items:center;justify-content:center;z-index:900;
+}
+.lightbox img{max-width:90vw;max-height:88vh;border-radius:var(--r2);}
+.lightbox-close{
+  position:fixed;top:16px;right:16px;background:rgba(255,255,255,.15);
+  border:none;color:#fff;font-size:20px;cursor:pointer;width:40px;height:40px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+}
+
+/* AUDIT TRAIL */
+.audit-item{display:flex;gap:12px;padding:.75rem 0;border-bottom:1px solid var(--border);}
+.audit-item:last-child{border-bottom:none;}
+.audit-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);margin-top:5px;flex-shrink:0;}
+.audit-content{flex:1;}
+.audit-action{font-size:13px;}
+.audit-meta{font-size:12px;color:var(--text3);margin-top:2px;}
+
+/* PARETO */
+.pareto-bar-wrap{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.pareto-label{font-size:13px;width:140px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pareto-track{flex:1;height:22px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+.pareto-fill{height:100%;background:var(--blue);border-radius:4px;display:flex;align-items:center;padding-left:8px;}
+.pareto-val{font-size:11px;font-family:var(--mono);color:#fff;font-weight:500;}
+.pareto-pct{font-size:12px;color:var(--text2);width:36px;text-align:right;flex-shrink:0;}
+
+/* NOTIFICATION */
+.notif{
+  position:fixed;bottom:24px;right:24px;z-index:999;
+  background:var(--text);color:#fff;border-radius:var(--r);
+  padding:12px 18px;font-size:13px;box-shadow:var(--shadow2);
+  transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;
+  max-width:320px;
+}
+.notif.show{transform:translateY(0);opacity:1;}
+.notif.success{background:#166534;}
+.notif.error{background:var(--red);}
+.notif.warning{background:var(--amber);}
+
+/* MODAL */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;
+  display:flex;align-items:center;justify-content:center;padding:1rem;
+}
+.modal{background:var(--surface);border-radius:var(--r3);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow2);}
+.modal-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:17px;font-weight:600;}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2);padding:4px;}
+.modal-body{padding:1.5rem;}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
+
+/* ACTION CARD */
+.action-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:1rem;margin-bottom:.75rem;border-left:4px solid var(--border);
+}
+.action-card.overdue{border-left-color:var(--red);background:var(--red-bg);}
+.action-card.complete{border-left-color:var(--green);background:var(--green-bg);}
+.action-card.progress{border-left-color:var(--blue);background:var(--blue-bg);}
+.action-title{font-size:14px;font-weight:500;}
+.action-meta{font-size:12px;color:var(--text2);margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;}
+
+/* AGEING INDICATOR */
+.age-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 8px;border-radius:99px;font-size:11px;font-weight:500;
+}
+
+/* MOBILE NAV */
+.mobile-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  background:var(--surface);border-top:1px solid var(--border);
+  padding:.5rem;z-index:80;gap:0;justify-content:space-around;
+}
+.mobile-nav-item{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:6px 12px;cursor:pointer;color:var(--text3);font-size:10px;
+  border-radius:var(--r);transition:all .12s;
+}
+.mobile-nav-item.active,.mobile-nav-item:hover{color:var(--blue);background:var(--blue-bg);}
+.mobile-nav-icon{font-size:20px;}
+
+@media(max-width:700px){
+  .sidebar{display:none;}
+  .mobile-nav{display:flex;}
+  .content{padding:1rem;padding-bottom:70px;}
+  .form-row-2,.form-row-3{grid-template-columns:1fr;}
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  .data-table{display:block;overflow-x:auto;}
+}
+
+/* UTILITY */
+.flex{display:flex;}.items-center{align-items:center;}.gap-8{gap:8px;}.gap-12{gap:12px;}.gap-16{gap:16px;}
+.justify-between{justify-content:space-between;}.justify-end{justify-content:flex-end;}
+.ml-auto{margin-left:auto;}.mb-4{margin-bottom:.25rem;}.mb-8{margin-bottom:.5rem;}.mb-12{margin-bottom:.75rem;}.mb-16{margin-bottom:1rem;}.mb-24{margin-bottom:1.5rem;}
+.mt-8{margin-top:.5rem;}.mt-12{margin-top:.75rem;}.mt-16{margin-top:1rem;}
+.text-sm{font-size:13px;}.text-xs{font-size:12px;}.text-muted{color:var(--text2);}.text-red{color:var(--red);}.text-green{color:var(--green);}.text-blue{color:var(--blue);}
+.font-mono{font-family:var(--mono);}.font-600{font-weight:600;}
+.divider{height:1px;background:var(--border);margin:1rem 0;}
+.badge-overdue{display:inline-flex;align-items:center;gap:4px;background:var(--red-bg);color:var(--red);padding:3px 8px;border-radius:99px;font-size:11px;font-weight:500;}
+/* POWER BI */
+.pbi-section{margin-bottom:1.5rem;}
+.pbi-step{display:flex;gap:16px;padding:1rem 0;border-bottom:1px solid var(--border);}
+.pbi-step:last-child{border-bottom:none;}
+.pbi-step-num{width:32px;height:32px;border-radius:50%;background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+.pbi-step-num.done{background:var(--green-bg);color:var(--green);}
+.pbi-step-content{flex:1;}
+.pbi-step-title{font-size:14px;font-weight:600;margin-bottom:4px;}
+.pbi-step-sub{font-size:13px;color:var(--text2);line-height:1.6;}
+.pbi-step-sub a{color:var(--blue);}
+.pbi-embed-frame{width:100%;height:540px;border:none;border-radius:var(--r2);}
+.pbi-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:1rem;}
+.pbi-status.connected{background:var(--green-bg);color:var(--green);border:1px solid #86efac;}
+.pbi-status.disconnected{background:var(--surface2);color:var(--text2);border:1px solid var(--border);}
+.pbi-status.error{background:var(--red-bg);color:var(--red);border:1px solid #fca5a5;}
+.dataset-block{background:var(--surface2);border-radius:var(--r);padding:1rem;margin-bottom:.75rem;}
+.dataset-title{font-size:13px;font-weight:600;margin-bottom:.5rem;display:flex;align-items:center;gap:8px;}
+.dataset-preview{font-family:var(--mono);font-size:11px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:.75rem;max-height:120px;overflow-y:auto;white-space:pre;}
+.copy-btn{font-size:11px;padding:4px 10px;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;margin-left:auto;}
+.copy-btn:hover{background:var(--blue-bg);color:var(--blue);border-color:var(--blue);}
+.pbi-tab-bar{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.5rem;}
+.pbi-tab{padding:10px 18px;font-size:14px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;}
+.pbi-tab:hover{color:var(--text);}
+.pbi-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.metric-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);color:var(--blue);padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;margin:3px;}
+/* OFFLINE BANNER */
+.offline-banner{
+  display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#92400e;color:#fef3c7;text-align:center;
+  padding:8px 16px;font-size:13px;font-weight:500;
+}
+.offline-banner.show{display:block;}
+.sync-indicator{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;
+  color:var(--amber);margin-left:8px;
+}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+/* LOADING OVERLAY */
+.loading-overlay{
+  position:fixed;inset:0;background:rgba(255,255,255,.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:800;gap:16px;
+}
+.loading-overlay.hidden{display:none;}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.combobox-wrap{position:relative;}
+.combobox-wrap input{width:100%;}
+.combobox-dropdown{
+  position:absolute;top:100%;left:0;right:0;background:var(--surface);
+  border:1.5px solid var(--blue);border-top:none;border-radius:0 0 var(--r) var(--r);
+  max-height:180px;overflow-y:auto;z-index:100;box-shadow:var(--shadow2);display:none;
+}
+.combobox-dropdown.open{display:block;}
+.combobox-opt{padding:9px 14px;cursor:pointer;font-size:14px;color:var(--text);}
+.combobox-opt:hover{background:var(--blue-bg);color:var(--blue);}
+.combobox-opt.new-entry{color:var(--blue);font-style:italic;}
+</style>
+</head>
+<body>
+
+<!-- OFFLINE BANNER -->
+<div class="offline-banner" id="offline-banner">
+  ⚠ You are offline — changes will sync when connection is restored
+</div>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay hidden" id="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-size:14px;color:var(--text2)" id="loading-msg">Loading…</div>
+</div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="login-screen">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-brand-icon">3C</div>
+        <div><div class="login-brand-name">Problem Solver</div><div class="login-brand-sub">Lean / Continuous Improvement</div></div>
+      </div>
+      <div class="login-title">Sign in</div>
+      <div class="login-sub">Enter your username and password.</div>
+      <div class="error-box" id="login-err">Invalid username or password.</div>
+      <div class="field"><label>Username</label><input type="text" id="l-email" placeholder="e.g. sflynn" autocomplete="username" style="text-transform:lowercase"></div>
+      <div class="field"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-full btn-lg" onclick="doLogin()">Sign in →</button>
+      <div class="login-demo">
+        Demo accounts:<br>
+        <strong>aalexander</strong> / admin123 → Admin<br>
+        <strong>mmorgan</strong> / mgr123 → Manager<br>
+        <strong>eevans</strong> / eng123 → Engineer<br>
+        <strong>oflanagan</strong> / op123 → Operator
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="app" class="hidden">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">3C</div>
+      <div><div class="sidebar-brand-text">Problem Solver</div><div class="sidebar-brand-sub">v2.0</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <div class="nav-item active" data-page="dashboard"><span class="nav-icon">▦</span> Dashboard</div>
+      <div class="nav-item" data-page="create"><span class="nav-icon">＋</span> Create Concern</div>
+      <div class="nav-section">Problems</div>
+      <div class="nav-item" data-page="problems"><span class="nav-icon">≡</span> Problem List <span class="nav-badge" id="open-badge">0</span></div>
+      <div class="nav-item" data-page="actions"><span class="nav-icon">✓</span> Actions <span class="nav-badge" id="action-badge" style="display:none">!</span></div>
+      <div class="nav-section">Insights</div>
+      <div class="nav-item" data-page="analytics"><span class="nav-icon">◉</span> Analytics</div>
+      <div class="nav-item" data-page="powerbi"><span class="nav-icon">⬡</span> Power BI</div>
+      <div class="nav-section">Settings</div>
+      <div class="nav-item" data-page="admin" id="nav-admin"><span class="nav-icon">⚙</span> Admin Panel</div>
+      <div class="nav-item" data-page="profile"><span class="nav-icon">◯</span> My Profile</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="sb-avatar"></div>
+      <div><div class="user-name" id="sb-name"></div><div class="user-role" id="sb-role"></div></div>
+      <button class="logout-btn" onclick="doLogout()" title="Sign out">⇥</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-sub" id="topbar-sub"></div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard"></div>
+
+      <!-- CREATE CONCERN -->
+      <div class="page" id="page-create"></div>
+
+      <!-- PROBLEM LIST -->
+      <div class="page" id="page-problems"></div>
+
+      <!-- PROBLEM DETAIL -->
+      <div class="page" id="page-detail"></div>
+
+      <!-- ACTIONS -->
+      <div class="page" id="page-actions"></div>
+
+      <!-- ANALYTICS -->
+      <div class="page" id="page-analytics"></div>
+
+      <!-- POWER BI -->
+      <div class="page" id="page-powerbi"></div>
+
+      <!-- ADMIN -->
+      <div class="page" id="page-admin"></div>
+
+      <!-- PROFILE -->
+      <div class="page" id="page-profile"></div>
+
+    </div>
+  </div>
+
+  <!-- MOBILE NAV -->
+  <div class="mobile-nav">
+    <div class="mobile-nav-item active" data-page="dashboard"><span class="mobile-nav-icon">▦</span>Home</div>
+    <div class="mobile-nav-item" data-page="create"><span class="mobile-nav-icon">＋</span>New</div>
+    <div class="mobile-nav-item" data-page="problems"><span class="mobile-nav-icon">≡</span>Problems</div>
+    <div class="mobile-nav-item" data-page="actions"><span class="mobile-nav-icon">✓</span>Actions</div>
+    <div class="mobile-nav-item" data-page="analytics"><span class="mobile-nav-icon">◉</span>Analytics</div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox hidden" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lb-img" src="" alt="">
+</div>
+
+<!-- MODAL (for actions, comments etc) -->
+<div class="modal-bg hidden" id="modal-bg">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Modal</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<div style="visibility:hidden;position:fixed;top:-9999px;left:-9999px;width:0;height:0;overflow:hidden;">
+  <input type="file" accept="image/*" capture="environment" id="cam-input" onchange="handlePhotoUpload(event)">
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA LAYER
+// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// SUPABASE CONFIGURATION — direct REST API, no SDK required
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://tksfptaoplatbxtyaqqv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrc2ZwdGFvcGxhdGJ4dHlhcXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNTU3NDEsImV4cCI6MjA5MDczMTc0MX0.LfJq-iSbG8pFsVk7ti6AD9E00lLnL1uKkQRzioJTmdA';
+
+let _authToken = null;   // JWT access token after login
+let _authUser  = null;   // raw Supabase auth user object
+let sb = true;           // always true — we use fetch directly
+
+function initSupabase() { return true; } // no-op, always ready
+
+// ── AUTH HELPERS ─────────────────────────────────────────────
+async function sbAuth(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error_description || data.msg || data.error || 'Login failed');
+  _authToken = data.access_token;
+  _authUser  = data.user;
+  // Persist session
+  localStorage.setItem('3c_token', _authToken);
+  localStorage.setItem('3c_user_id', data.user.id);
+  return data;
+}
+
+async function sbSignOut() {
+  if (_authToken) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` }
+    }).catch(()=>{});
+  }
+  _authToken = null; _authUser = null;
+  localStorage.removeItem('3c_token');
+  localStorage.removeItem('3c_user_id');
+}
+
+async function sbUpdatePassword(newPassword) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` },
+    body: JSON.stringify({ password: newPassword })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error_description || data.msg || 'Password update failed');
+  return data;
+}
+
+async function sbRestoreSession() {
+  const token = localStorage.getItem('3c_token');
+  if (!token) return null;
+  // Verify token is still valid
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` }
+  });
+  if (!r.ok) { localStorage.removeItem('3c_token'); return null; }
+  const user = await r.json();
+  _authToken = token;
+  _authUser = user;
+  return user;
+}
+
+// ── DATABASE HELPERS ─────────────────────────────────────────
+function dbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${_authToken || SUPABASE_ANON_KEY}`,
+    'Prefer': 'return=representation'
+  };
+}
+
+async function dbSelect(table, params) {
+  const q = params ? '?' + new URLSearchParams(params) : '';
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${q}`, {
+    headers: { ...dbHeaders(), 'Prefer': 'return=representation' }
+  });
+  if (!r.ok) { const e = await r.json(); throw new Error(e.message || r.statusText); }
+  return r.json();
+}
+
+async function dbSelectOne(table, params) {
+  const rows = await dbSelect(table, params);
+  return Array.isArray(rows) ? rows[0] || null : rows;
+}
+
+async function dbUpsert(table, row) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...dbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
+    body: JSON.stringify(row)
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || e.details || r.statusText); }
+  const data = await r.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function dbUpdate(table, row, matchCol, matchVal) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+    method: 'PATCH',
+    headers: dbHeaders(),
+    body: JSON.stringify(row)
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || r.statusText); }
+  return r.status === 204 ? null : r.json().catch(()=>null);
+}
+
+async function dbDelete(table, matchCol, matchVal) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+    method: 'DELETE',
+    headers: dbHeaders()
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || r.statusText); }
+}
+
+async function dbInsert(table, row) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: dbHeaders(),
+    body: JSON.stringify(row)
+  });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || e.details || r.statusText); }
+  const data = await r.json().catch(()=>null);
+  return Array.isArray(data) ? data[0] : data;
+}
+
+// Stub out the old sb.auth / sb.from style calls we may still reference
+const _sbStub = {
+  auth: {
+    signOut: sbSignOut,
+    updateUser: (u) => sbUpdatePassword(u.password),
+    admin: { createUser: ()=>{ throw new Error('Admin API requires service role key'); }, updateUserById: ()=>{ throw new Error('Admin API requires service role key'); }, deleteUser: ()=>{ throw new Error('Admin API requires service role key'); } }
+  }
+};
+
+// ── OFFLINE QUEUE ─────────────────────────────────────────────
+// Stores failed writes when offline; replayed on reconnect
+let offlineQueue = JSON.parse(localStorage.getItem('3c_offline_queue') || '[]');
+
+function saveOfflineQueue() {
+  localStorage.setItem('3c_offline_queue', JSON.stringify(offlineQueue));
+}
+
+function queueWrite(fn, args) {
+  offlineQueue.push({ fn, args, ts: Date.now() });
+  saveOfflineQueue();
+}
+
+async function flushOfflineQueue() {
+  if (!offlineQueue.length || !navigator.onLine) return;
+  const queue = [...offlineQueue];
+  offlineQueue = [];
+  saveOfflineQueue();
+  let failed = [];
+  for (const item of queue) {
+    try {
+      await window[item.fn](...item.args);
+    } catch(e) {
+      failed.push(item);
+    }
+  }
+  if (failed.length) { offlineQueue = failed; saveOfflineQueue(); }
+  else if (queue.length) { showNotif(`Synced ${queue.length} offline change${queue.length>1?'s':''}.`, 'success'); }
+}
+
+// ── IN-MEMORY CACHE (for offline reads) ──────────────────────
+let _cache = {
+  problems: JSON.parse(localStorage.getItem('3c_cache_problems') || '[]'),
+  actions:  JSON.parse(localStorage.getItem('3c_cache_actions')  || '[]'),
+  users:    JSON.parse(localStorage.getItem('3c_cache_users')    || '[]'),
+  depts:    JSON.parse(localStorage.getItem('3c_cache_depts')    || JSON.stringify(['Assembly','Machining','Painting','Quality','Welding','Packaging','Maintenance'])),
+  procs:    JSON.parse(localStorage.getItem('3c_cache_procs')    || JSON.stringify(['Line 1','Line 2','Line 3','Cell A','Cell B','Press Shop','Inspection'])),
+};
+
+function setCache(key, data) {
+  _cache[key] = data;
+  localStorage.setItem('3c_cache_' + key, JSON.stringify(data));
+}
+
+// ── ONLINE/OFFLINE DETECTION ──────────────────────────────────
+window.addEventListener('online',  () => { updateOnlineStatus(); flushOfflineQueue(); });
+window.addEventListener('offline', () => updateOnlineStatus());
+
+function updateOnlineStatus() {
+  const banner = document.getElementById('offline-banner');
+  if (banner) banner.classList.toggle('show', !navigator.onLine);
+}
+
+// ── DATA LAYER — USERS ────────────────────────────────────────
+async function getUsers() {
+  if (!navigator.onLine) return _cache.users;
+  try {
+    const rows = await dbSelect('profiles', { order: 'full_name' });
+    const mapped = rows.map(u => ({
+      id: u.id, username: u.username, name: u.full_name,
+      role: u.role, dept: u.department, initials: u.initials,
+      mustChangePassword: u.must_change_password
+    }));
+    setCache('users', mapped);
+    return mapped;
+  } catch(e) { return _cache.users; }
+}
+
+async function saveUserProfile(userId, updates) {
+  await dbUpdate('profiles', {
+    full_name: updates.name, username: updates.username,
+    role: updates.role, department: updates.dept,
+    initials: updates.initials,
+    must_change_password: updates.mustChangePassword ?? false,
+  }, 'id', userId);
+  await getUsers();
+}
+
+// ── DATA LAYER — PROBLEMS ─────────────────────────────────────
+async function getProblems() {
+  if (!navigator.onLine) return _cache.problems;
+  try {
+    const rows = await dbSelect('v_problems', { order: 'created_at.desc' });
+    const mapped = rows.map(mapDbProblem);
+    setCache('problems', mapped);
+    return mapped;
+  } catch(e) {
+    // Fall back to direct table
+    try {
+      const rows = await dbSelect('problems', { order: 'created_at.desc' });
+      const mapped = rows.map(mapDbProblem);
+      setCache('problems', mapped);
+      return mapped;
+    } catch(e2) { return _cache.problems; }
+  }
+}
+
+function mapDbProblem(p) {
+  return {
+    id: p.id,
+    problemId: p.problem_id,
+    title: p.title,
+    description: p.description,
+    dept: p.department,
+    process: p.process,
+    category: p.category,
+    severity: p.severity,
+    status: p.status,
+    impact: p.impact,
+    frequency: p.frequency,
+    firstSeen: p.first_seen_date,
+    cause: {
+      description: p.cause_description,
+      type: p.cause_type,
+      tools: p.cause_tools,
+      evidence: p.cause_evidence,
+    },
+    countermeasure: {
+      description: p.cm_description,
+      type: p.cm_type,
+      owner: p.cm_owner_id,
+      ownerName: p.cm_owner_name,
+      dueDate: p.cm_due_date,
+      status: p.cm_status,
+    },
+    reportedById: p.reported_by_id,
+    reportedByName: p.reported_by_name,
+    closedDate: p.closed_date ? new Date(p.closed_date).getTime() : null,
+    created: new Date(p.created_at).getTime(),
+    updated: new Date(p.updated_at).getTime(),
+    photoCount: p.photo_count || 0,
+    actionCount: p.action_count || 0,
+    actionsComplete: p.actions_complete || 0,
+    ageDays: p.age_days || 0,
+    // Photos are loaded separately
+    concernPhotos: [], causePhotos: [], countermeasurePhotos: [],
+    audit: [],
+  };
+}
+
+async function saveProblem(p) {
+  if (!navigator.onLine) { queueWrite('saveProblem', [p]); return p; }
+  const row = {
+    id: p.id,
+    title: p.title,
+    description: p.description || null,
+    department: p.dept || null,
+    process: p.process || null,
+    category: p.category || null,
+    severity: p.severity || null,
+    status: p.status || 'new',
+    impact: p.impact || null,
+    frequency: p.frequency || null,
+    first_seen_date: p.firstSeen || null,
+    cause_description: p.cause?.description || null,
+    cause_type: p.cause?.type || null,
+    cause_tools: p.cause?.tools || null,
+    cause_evidence: p.cause?.evidence || null,
+    cm_description: p.countermeasure?.description || null,
+    cm_type: p.countermeasure?.type || null,
+    cm_owner_id: p.countermeasure?.owner || null,
+    cm_due_date: p.countermeasure?.dueDate || null,
+    cm_status: p.countermeasure?.status || null,
+    reported_by_id: p.reportedById || currentUser?.id || null,
+    closed_date: p.closedDate ? new Date(p.closedDate).toISOString() : null,
+  };
+  try {
+    const saved = await dbUpsert('problems', row);
+    if (saved) { p.problemId = saved.problem_id || p.problemId; p.id = saved.id; p._saved = true; }
+    return p;
+  } catch(e) {
+    console.error('saveProblem error:', e);
+    queueWrite('saveProblem', [p]);
+    throw e;
+  }
+}
+
+async function getProblemWithDetails(id) {
+  if (!id) return null;
+  if (!navigator.onLine) return _cache.problems.find(x => x.id === id) || null;
+  try {
+    // Try view first, fall back to direct table
+    let pData;
+    try {
+      const rows = await dbSelect('v_problems', { id: `eq.${id}` });
+      pData = rows[0];
+    } catch(e) {
+      const rows = await dbSelect('problems', { id: `eq.${id}` });
+      pData = rows[0];
+    }
+    if (!pData) return null;
+    const problem = mapDbProblem(pData);
+
+    // Photos
+    try {
+      const photos = await dbSelect('problem_photos', { problem_id: `eq.${id}`, order: 'created_at' });
+      for (const photo of photos) {
+        const src = `${SUPABASE_URL}/storage/v1/object/authenticated/problem-photos/${photo.storage_path}`;
+        if (photo.section === 'concern') problem.concernPhotos.push(src);
+        else if (photo.section === 'cause') problem.causePhotos.push(src);
+        else if (photo.section === 'countermeasure') problem.countermeasurePhotos.push(src);
+      }
+    } catch(e) { /* photos optional */ }
+
+    // Audit
+    try {
+      const audit = await dbSelect('audit_log', { problem_id: `eq.${id}`, order: 'created_at.desc' });
+      problem.audit = audit.map(a => ({
+        action: a.action, by: a.performed_by_name,
+        ts: new Date(a.created_at).getTime(),
+      }));
+    } catch(e) { /* audit optional */ }
+
+    return problem;
+  } catch(e) {
+    console.error('getProblemWithDetails error:', e);
+    return _cache.problems.find(x => x.id === id) || null;
+  }
+}
+}
+
+// ── DATA LAYER — ACTIONS ──────────────────────────────────────
+async function getActions(problemId) {
+  if (!navigator.onLine) {
+    const cached = _cache.actions;
+    return problemId ? cached.filter(a => a.problemId === problemId) : cached;
+  }
+  try {
+    const params = problemId
+      ? { problem_id: `eq.${problemId}`, order: 'created_at' }
+      : { order: 'created_at' };
+    const rows = await dbSelect('v_actions', params);
+    const mapped = rows.map(a => ({
+      id: a.id, problemId: a.problem_id, title: a.title,
+      owner: a.owner_id, ownerName: a.owner_name,
+      dueDate: a.due_date, status: a.status, comments: a.comments,
+      completedDate: a.completed_at ? new Date(a.completed_at).getTime() : null,
+      created: new Date(a.created_at).getTime(),
+    }));
+    if (!problemId) setCache('actions', mapped);
+    return mapped;
+  } catch(e) {
+    // fallback to direct table
+    try {
+      const params = problemId
+        ? { problem_id: `eq.${problemId}`, order: 'created_at' }
+        : { order: 'created_at' };
+      const rows = await dbSelect('actions', params);
+      const mapped = rows.map(a => ({
+        id: a.id, problemId: a.problem_id, title: a.title,
+        owner: a.owner_id, ownerName: _cache.users.find(u=>u.id===a.owner_id)?.name || '',
+        dueDate: a.due_date, status: a.status, comments: a.comments,
+        completedDate: a.completed_at ? new Date(a.completed_at).getTime() : null,
+        created: new Date(a.created_at).getTime(),
+      }));
+      if (!problemId) setCache('actions', mapped);
+      return mapped;
+    } catch(e2) {
+      return _cache.actions.filter(a => !problemId || a.problemId === problemId);
+    }
+  }
+}
+
+async function saveAction(a) {
+  if (!navigator.onLine) { queueWrite('saveAction', [a]); return; }
+  const row = {
+    id: a.id, problem_id: a.problemId, title: a.title,
+    owner_id: a.owner || null, due_date: a.dueDate || null,
+    status: a.status, comments: a.comments || null,
+    completed_at: a.completedDate ? new Date(a.completedDate).toISOString() : null,
+    created_by: currentUser?.id || null,
+  };
+  try { await dbUpsert('actions', row); }
+  catch(e) { queueWrite('saveAction', [a]); throw e; }
+}
+
+async function deleteAction(id) {
+  await dbDelete('actions', 'id', id);
+}
+
+// ── DATA LAYER — AUDIT ────────────────────────────────────────
+async function addAuditEntry(problemId, action) {
+  if (!problemId) return;
+  try {
+    await dbInsert('audit_log', {
+      problem_id: problemId, action,
+      performed_by: currentUser?.id || null,
+      performed_by_name: currentUser?.name || 'Unknown',
+    });
+  } catch(e) { console.warn('Audit log error:', e.message); }
+}
+
+// ── DATA LAYER — PHOTOS ───────────────────────────────────────
+async function uploadPhoto(problemId, section, dataUrl) {
+  if (!_authToken) return null;
+  const ext = dataUrl.split(';')[0].split('/')[1] || 'jpg';
+  const path = `${problemId}/${section}/${Date.now()}.${ext}`;
+  const blob = await (await fetch(dataUrl)).blob();
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/problem-photos/${path}`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}`, 'Content-Type': blob.type },
+    body: blob
+  });
+  if (!r.ok) { console.error('Photo upload error:', await r.text()); return null; }
+  await dbInsert('problem_photos', {
+    problem_id: problemId, section, storage_path: path,
+    uploaded_by: currentUser?.id || null,
+  });
+  return path;
+}
+
+async function deletePhoto(path, photoRowId) {
+  if (!_authToken) return;
+  await fetch(`${SUPABASE_URL}/storage/v1/object/problem-photos/${path}`, {
+    method: 'DELETE',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` }
+  }).catch(()=>{});
+  if (photoRowId) await dbDelete('problem_photos', 'id', photoRowId).catch(()=>{});
+}
+
+// ── DATA LAYER — DEPTS/PROCESSES ─────────────────────────────
+async function getStoredDepts() {
+  if (!navigator.onLine) return _cache.depts;
+  try {
+    const rows = await dbSelect('departments', { order: 'name' });
+    const names = rows.map(d => d.name);
+    setCache('depts', names); return names;
+  } catch(e) { return _cache.depts; }
+}
+
+async function getStoredProcesses() {
+  if (!navigator.onLine) return _cache.procs;
+  try {
+    const rows = await dbSelect('processes', { order: 'name' });
+    const names = rows.map(d => d.name);
+    setCache('procs', names); return names;
+  } catch(e) { return _cache.procs; }
+}
+
+async function addCustomDept(val) {
+  if (!val) return;
+  const depts = await getStoredDepts();
+  if (depts.includes(val)) return;
+  try { await dbInsert('departments', { name: val }); } catch(e) {}
+  setCache('depts', [...depts, val]);
+}
+
+async function addCustomProcess(val) {
+  if (!val) return;
+  const procs = await getStoredProcesses();
+  if (procs.includes(val)) return;
+  try { await dbInsert('processes', { name: val }); } catch(e) {}
+  setCache('procs', [...procs, val]);
+}
+
+// ── REALTIME SUBSCRIPTIONS ────────────────────────────────────
+function subscribeToRealtime() {
+  // Realtime via SDK not available without the SDK
+  // Poll for updates every 30s as fallback when on the dashboard
+  if (window._realtimeInterval) clearInterval(window._realtimeInterval);
+  window._realtimeInterval = setInterval(() => {
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
+    else if (document.getElementById('page-problems')?.classList.contains('active')) renderProblems();
+    updateBadges();
+  }, 30000);
+}
+
+// ── LEGACY HELPERS (for offline-only fallback) ────────────────
+function uid(){ return crypto.randomUUID ? crypto.randomUUID() : 'p'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+function aid(){ return crypto.randomUUID ? crypto.randomUUID() : 'a'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+
+async function nextProblemId(){
+  const ps = await getProblems();
+  return 'RPT-' + String(ps.length + 1).padStart(4, '0');
+}
+const STATUS_LABELS = {
+  'new':'New','cause-defined':'Cause Defined',
+  'countermeasure-defined':'Countermeasure Defined','closed':'Closed'
+};
+const STATUS_PILL = {
+  'new':'pill-new','cause-defined':'pill-cause',
+  'countermeasure-defined':'pill-counter','closed':'pill-closed'
+};
+
+let currentUser = null;
+let currentPhotoTarget = null;
+let editingProblemId = null;
+let currentDetailId = null;
+
+function showLoading(msg='Loading…') {
+  const el = document.getElementById('loading-overlay');
+  const msg_el = document.getElementById('loading-msg');
+  if (el) el.classList.remove('hidden');
+  if (msg_el) msg_el.textContent = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('loading-overlay');
+  if (el) el.classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+// AUTH — SUPABASE
+// ══════════════════════════════════════════════
+document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('l-email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('l-pass').focus();});
+
+async function doLogin(){
+  const username = document.getElementById('l-email').value.trim().toLowerCase();
+  const pass = document.getElementById('l-pass').value;
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
+
+  if (!username || !pass) {
+    err.textContent = 'Please enter your username and password.';
+    err.style.display = 'block';
+    return;
+  }
+
+  showLoading('Signing in…');
+  try {
+    const email = `${username}@3capp.local`;
+    await sbAuth(email, pass);
+
+    // Load profile
+    const rows = await dbSelect('profiles', { id: `eq.${_authUser.id}` });
+    const fullProfile = rows[0];
+
+    if (!fullProfile) {
+      hideLoading();
+      err.textContent = 'Account found but profile is missing — contact your administrator.';
+      err.style.display = 'block';
+      await sbSignOut();
+      return;
+    }
+
+    currentUser = {
+      id: fullProfile.id, username: fullProfile.username,
+      name: fullProfile.full_name, role: fullProfile.role,
+      dept: fullProfile.department, initials: fullProfile.initials,
+      mustChangePassword: fullProfile.must_change_password,
+    };
+
+    hideLoading();
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+
+    if (currentUser.mustChangePassword) { initApp(); showChangePasswordModal(); }
+    else initApp();
+    subscribeToRealtime();
+  } catch(e) {
+    hideLoading();
+    err.textContent = e.message || 'Login failed.';
+    err.style.display = 'block';
+  }
+}
+
+async function doLogout(){
+  await sbSignOut();
+  if (window._realtimeInterval) clearInterval(window._realtimeInterval);
+  currentUser = null;
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('l-email').value = '';
+  document.getElementById('l-pass').value = '';
+}
+
+function showSetupPrompt() {
+  // Scroll down to show the config section in the login card
+  const hint = document.querySelector('.login-demo');
+  if (hint) {
+    hint.innerHTML = `
+      <strong style="color:var(--red)">Supabase not configured</strong><br>
+      Enter your Supabase credentials below to connect:
+      <div style="margin-top:8px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">SUPABASE URL</label>
+        <input id="sb-url-input" type="text" placeholder="https://xxx.supabase.co" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">ANON KEY</label>
+        <input id="sb-key-input" type="text" placeholder="eyJhbGci..." style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
+        <button onclick="saveSupabaseConfig()" style="width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">Connect & Sign in</button>
+      </div>
+    `;
+  }
+}
+
+function saveSupabaseConfig() {
+  const url = document.getElementById('sb-url-input')?.value.trim();
+  const key = document.getElementById('sb-key-input')?.value.trim();
+  if (!url || !key) { showNotif('Both URL and key required.', 'error'); return; }
+  localStorage.setItem('3c_sb_url', url);
+  localStorage.setItem('3c_sb_key', key);
+  showNotif('Saved — reloading…', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+
+// ── PASSWORD CHANGE ───────────────────────────────────────────
+function showChangePasswordModal(){
+  document.getElementById('modal-title').textContent='Set Your Password';
+  document.getElementById('modal-body').innerHTML=`
+    <div style="background:var(--amber-bg);border:1px solid #fde68a;border-radius:var(--r);padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:1rem;">
+      Your account has a temporary password. Please set a new password to continue.
+    </div>
+    <div class="field mb-12"><label>New Password</label><input type="password" id="np-pass" placeholder="Min. 6 characters"></div>
+    <div class="field"><label>Confirm Password</label><input type="password" id="np-confirm" placeholder="Repeat password"></div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-primary" onclick="saveNewPassword()">Set Password</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function saveNewPassword(){
+  const p1 = document.getElementById('np-pass').value;
+  const p2 = document.getElementById('np-confirm').value;
+  if(p1.length<6){showNotif('Password must be at least 6 characters.','error');return;}
+  if(p1!==p2){showNotif('Passwords do not match.','error');return;}
+  try {
+    await sbUpdatePassword(p1);
+    await dbUpdate('profiles', { must_change_password: false }, 'id', currentUser.id);
+    currentUser.mustChangePassword = false;
+    closeModal();
+    showNotif('Password updated successfully.','success');
+  } catch(e){ showNotif('Error: '+e.message,'error'); }
+}
+
+async function saveMyPassword(){
+  const newP = document.getElementById('cp-new').value;
+  const conf = document.getElementById('cp-confirm').value;
+  if(newP.length<6){showNotif('New password must be at least 6 characters.','error');return;}
+  if(newP!==conf){showNotif('Passwords do not match.','error');return;}
+  try {
+    await sbUpdatePassword(newP);
+    closeModal();
+    showNotif('Password updated.','success');
+  } catch(e){ showNotif('Error: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// APP INIT
+// ══════════════════════════════════════════════
+// Register service worker for offline support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'ONLINE_RESTORED') { flushOfflineQueue(); updateBadges(); }
+  });
+}
+
+// Init Supabase on page load
+document.addEventListener('DOMContentLoaded', () => {
+  initSupabase();
+  updateOnlineStatus();
+
+  // Try to restore session from stored token
+  setTimeout(async () => {
+    try {
+      const user = await sbRestoreSession();
+      if (!user) return; // no session — stay on login
+
+      showLoading('Restoring session…');
+      const rows = await dbSelect('profiles', { id: `eq.${user.id}` });
+      const profile = rows[0];
+
+      if (!profile) { hideLoading(); return; }
+
+      currentUser = {
+        id: profile.id, username: profile.username,
+        name: profile.full_name, role: profile.role,
+        dept: profile.department, initials: profile.initials,
+        mustChangePassword: profile.must_change_password,
+      };
+      hideLoading();
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      initApp();
+      subscribeToRealtime();
+    } catch(e) {
+      hideLoading();
+    }
+  }, 50);
+});
+
+function initApp(){
+  document.getElementById('sb-name').textContent = currentUser.name;
+  document.getElementById('sb-role').textContent = currentUser.role.charAt(0).toUpperCase()+currentUser.role.slice(1);
+  document.getElementById('sb-avatar').textContent = currentUser.initials;
+  const adminNav = document.getElementById('nav-admin');
+  if(currentUser.role==='admin') adminNav.classList.remove('hidden');
+  else adminNav.classList.add('hidden');
+  document.querySelectorAll('[data-page]').forEach(el=>{
+    el.addEventListener('click',()=>goTo(el.dataset.page));
+  });
+  updateBadges();
+  goTo('dashboard');
+}
+
+function goTo(page){
+  document.querySelectorAll('.nav-item,[class*=mobile-nav-item]').forEach(el=>{
+    el.classList.toggle('active',el.dataset.page===page);
+  });
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  const target = document.getElementById('page-'+page);
+  if(target){ target.classList.add('active'); renderPage(page); }
+  const titles = {dashboard:'Dashboard',create:'Create Concern',problems:'Problem List',detail:'Problem Detail',actions:'Action Management',analytics:'Analytics & Reports',powerbi:'Power BI Integration',admin:'Admin Panel',profile:'My Profile'};
+  document.getElementById('topbar-title').textContent = titles[page]||page;
+  document.getElementById('topbar-sub').textContent = new Date().toLocaleDateString('en-IE',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+}
+
+function renderPage(page){
+  if(page==='dashboard') renderDashboard();
+  else if(page==='create') renderCreate();
+  else if(page==='problems') renderProblems();
+  else if(page==='detail') renderDetail();
+  else if(page==='actions') renderActions();
+  else if(page==='analytics') renderAnalytics();
+  else if(page==='powerbi') renderPowerBI();
+  else if(page==='admin') renderAdmin();
+  else if(page==='profile') renderProfile();
+}
+
+async function updateBadges(){
+  const ps = await getProblems();
+  const open = ps.filter(p=>p.status!=='closed').length;
+  document.getElementById('open-badge').textContent=open;
+  const actions = await getActions();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const overdue = actions.filter(a=>a.status!=='complete' && a.dueDate && new Date(a.dueDate)<today).length;
+  const ab = document.getElementById('action-badge');
+  if(overdue>0){ab.style.display='';ab.textContent=overdue;}else{ab.style.display='none';}
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+async function renderDashboard(){
+  const ps = await getProblems();
+  const visible = ps;
+  const actions = await getActions();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const total=visible.length, open=visible.filter(p=>p.status!=='closed').length;
+  const closed=visible.filter(p=>p.status==='closed').length;
+  const overdue=actions.filter(a=>a.status!=='complete'&&a.dueDate&&new Date(a.dueDate)<today).length;
+  const high=visible.filter(p=>p.severity==='High'&&p.status!=='closed').length;
+  const avgClose = calcAvgClose(visible);
+  const recent = [...visible].sort((a,b)=>b.created-a.created).slice(0,5);
+
+  document.getElementById('page-dashboard').innerHTML=`
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val stat-blue">${total}</div><div class="stat-label">Total Problems</div></div>
+      <div class="stat-card"><div class="stat-val stat-amber">${open}</div><div class="stat-label">Open</div></div>
+      <div class="stat-card"><div class="stat-val stat-green">${closed}</div><div class="stat-label">Closed</div></div>
+      <div class="stat-card"><div class="stat-val stat-red">${overdue}</div><div class="stat-label">Overdue Actions</div></div>
+      <div class="stat-card"><div class="stat-val stat-red">${high}</div><div class="stat-label">High Severity Open</div></div>
+      <div class="stat-card"><div class="stat-val stat-blue">${avgClose}</div><div class="stat-label">Avg Days to Close</div></div>
+    </div>
+
+    ${high>0?`<div class="card mb-16" style="border-left:4px solid var(--red);">
+      <div class="card-body flex items-center gap-12">
+        <span style="font-size:20px;">🚨</span>
+        <div><div class="font-600 text-red">${high} High Severity problem${high>1?'s':''} open</div>
+        <div class="text-sm text-muted">Containment required within 24h</div></div>
+        <button class="btn btn-ghost btn-sm ml-auto" onclick="filterToHigh()">View →</button>
+      </div></div>`:''}
+
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">Recent Problems</div>
+        <button class="btn btn-ghost btn-sm ml-auto" onclick="goTo('problems')">View all</button></div>
+      <div class="card-body-p0">
+        ${recent.length===0?'<div class="card-body text-muted text-sm">No problems logged yet.</div>':
+          `<table class="data-table"><thead><tr><th>ID</th><th>Title</th><th>Dept</th><th>Sev</th><th>Status</th><th>Age</th></tr></thead><tbody>
+          ${recent.map(p=>`<tr onclick="openDetail('${p.id}')">
+            <td><span class="font-mono text-blue">${p.problemId}</span></td>
+            <td>${p.title}</td><td>${p.dept}</td>
+            <td><span class="pill ${sevClass(p.severity)}">${p.severity}</span></td>
+            <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
+            <td>${ageChip(p)}</td>
+          </tr>`).join('')}</tbody></table>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Status Breakdown</div></div>
+      <div class="card-body">
+        ${STATUS_FLOW.map(s=>{
+          const n=visible.filter(p=>p.status===s).length;
+          const pct=total?Math.round(n/total*100):0;
+          return`<div class="pareto-bar-wrap mb-8"><div class="pareto-label text-sm">${STATUS_LABELS[s]}</div>
+            <div class="pareto-track"><div class="pareto-fill" style="width:${pct}%;background:var(--blue)"><span class="pareto-val">${n>0?n:''}</span></div></div>
+            <div class="pareto-pct">${pct}%</div></div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function calcAvgClose(ps){
+  const closed=ps.filter(p=>p.status==='closed'&&p.closedDate);
+  if(!closed.length) return '—';
+  const avg=closed.reduce((s,p)=>s+(p.closedDate-p.created),0)/closed.length;
+  return Math.round(avg/86400000)+'d';
+}
+
+function ageChip(p){
+  if(p.status==='closed') return `<span class="age-chip" style="background:var(--green-bg);color:var(--green)">Closed</span>`;
+  const days=Math.floor((Date.now()-p.created)/86400000);
+  const threshold=14;
+  if(days>threshold) return `<span class="age-chip" style="background:var(--red-bg);color:var(--red)">⚠ ${days}d</span>`;
+  if(days>7) return `<span class="age-chip" style="background:var(--amber-bg);color:var(--amber)">${days}d</span>`;
+  return `<span class="age-chip" style="background:var(--surface2);color:var(--text2)">${days}d</span>`;
+}
+
+function sevClass(s){return{Low:'sev-low',Medium:'sev-medium',High:'sev-high'}[s]||'';}
+function catClass(c){return{Quality:'cat-quality',Safety:'cat-safety',Downtime:'cat-downtime',Cost:'cat-cost'}[c]||'';}
+
+function filterToHigh(){ window._filterSev='High'; goTo('problems'); }
+
+// All users see all problems — handled by getProblems()
+
+// ══════════════════════════════════════════════
+// CREATE CONCERN
+// ══════════════════════════════════════════════
+async function renderCreate(){
+  const isEdit = !!editingProblemId;
+  let ep = {};
+  if(isEdit){ ep=(_cache.problems||[]).find(p=>p.id===editingProblemId)||{}; }
+  // Pre-load depts and processes so comboboxes have data
+  const depts = await getStoredDepts();
+  const procs = await getStoredProcesses();
+  // Store in cache for sync combobox access
+  _cache.depts = depts; _cache.procs = procs;
+
+  document.getElementById('page-create').innerHTML=`
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge step-c1">C1</div>
+        <div><div class="step-title">${isEdit?'Edit Concern':'New Concern'}</div>
+          <div class="step-sub">Log a new problem or concern</div></div>
+      </div>
+      <div class="card-body">
+        <div class="form-section">
+          <div class="form-section-title">Problem Information</div>
+          <div class="field mb-12"><label>Problem Title *</label>
+            <input id="c-title" type="text" placeholder="Short, clear problem statement" value="${esc(ep.title||'')}"></div>
+          <div class="field mb-12"><label>Description</label>
+            <textarea id="c-desc" placeholder="Detailed description — what, when, where, how often…">${esc(ep.description||'')}</textarea></div>
+          <div class="form-row form-row-2">
+            <div class="field"><label>Department / Area *</label>
+              <div class="combobox-wrap">
+                <input id="c-dept" type="text" placeholder="Select or type…" value="${esc(ep.dept||'')}" autocomplete="off" oninput="filterCombo('c-dept','c-dept-dd',_cache.depts||[])" onfocus="openCombo('c-dept','c-dept-dd',_cache.depts||[])" onblur="setTimeout(()=>closeCombo('c-dept-dd'),200)">
+                <div id="c-dept-dd" class="combobox-dropdown"></div>
+              </div></div>
+            <div class="field"><label>Line / Process</label>
+              <div class="combobox-wrap">
+                <input id="c-process" type="text" placeholder="Select or type…" value="${esc(ep.process||'')}" autocomplete="off" oninput="filterCombo('c-process','c-process-dd',_cache.procs||[])" onfocus="openCombo('c-process','c-process-dd',_cache.procs||[])" onblur="setTimeout(()=>closeCombo('c-process-dd'),200)">
+                <div id="c-process-dd" class="combobox-dropdown"></div>
+              </div></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Classification</div>
+          <div class="form-row form-row-2">
+            <div class="field"><label>Category *</label>
+              <select id="c-cat">
+                ${['Quality','Downtime','Safety','Cost'].map(c=>`<option ${ep.category===c?'selected':''}>${c}</option>`).join('')}
+              </select></div>
+            <div class="field"><label>Severity *</label>
+              <select id="c-sev">
+                ${['Low','Medium','High'].map(s=>`<option ${ep.severity===s?'selected':''}>${s}</option>`).join('')}
+              </select></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Evidence Photo (Concern)</div>
+          <div class="photo-grid" id="create-photos"></div>
+          <button class="photo-add-btn mt-8" onclick="triggerPhoto('create-concern')">
+            <span class="icon">📷</span><span>Add Photo</span></button>
+        </div>
+        <div class="form-section">
+          <div class="form-section-title">Reporter</div>
+          <div class="form-row form-row-2">
+            <div class="field"><label>Reported By</label>
+              <input type="text" value="${currentUser.name}" disabled></div>
+            <div class="field"><label>Date / Time</label>
+              <input type="text" value="${new Date().toLocaleString('en-IE')}" disabled></div>
+          </div>
+        </div>
+        <div class="flex gap-12 justify-end mt-16">
+          <button class="btn btn-ghost" onclick="cancelCreate()">Cancel</button>
+          <button class="btn btn-primary btn-lg" onclick="submitConcern()">
+            ${isEdit?'Save Changes':'Log Concern →'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  window._createPhotos = isEdit ? (ep.concernPhotos||[]) : [];
+  renderCreatePhotos();
+}
+
+function renderCreatePhotos(){
+  const strip = document.getElementById('create-photos');
+  if(!strip) return;
+  strip.innerHTML = window._createPhotos.map((src,i)=>
+    `<div class="photo-thumb" onclick="openLightbox('${i}','create')">
+      <img src="${src}"><button class="del-btn" onclick="event.stopPropagation();deleteCreatePhoto(${i})">✕</button></div>`
+  ).join('');
+}
+
+function deleteCreatePhoto(i){ window._createPhotos.splice(i,1); renderCreatePhotos(); }
+
+function triggerPhoto(target){
+  currentPhotoTarget=target;
+  document.getElementById('cam-input').click();
+}
+
+function handlePhotoUpload(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const src=ev.target.result;
+    if(currentPhotoTarget==='create-concern'){
+      window._createPhotos.push(src); renderCreatePhotos();
+    } else if(currentPhotoTarget&&currentPhotoTarget.startsWith('detail-')){
+      const section=currentPhotoTarget.replace('detail-','');
+      addDetailPhoto(section,src);
+    }
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+
+async function submitConcern(){
+  const title=document.getElementById('c-title').value.trim();
+  if(!title){showNotif('Problem title is required.','error');return;}
+  const dept=document.getElementById('c-dept').value.trim();
+  const process=document.getElementById('c-process').value.trim();
+  // Persist custom dept/process values
+  if(dept) await addCustomDept(dept);
+  if(process) await addCustomProcess(process);
+  const ps = await getProblems();
+  if(editingProblemId){
+    const existing = ps.find(p=>p.id===editingProblemId);
+    if(existing){
+      existing.title=title;
+      existing.description=document.getElementById('c-desc').value;
+      existing.dept=dept;
+      existing.process=process;
+      existing.category=document.getElementById('c-cat').value;
+      existing.severity=document.getElementById('c-sev').value;
+      existing.concernPhotos=window._createPhotos;
+      existing.updated=Date.now();
+      try {
+        await saveProblem(existing);
+        await addAuditEntry(existing.id,'Concern updated');
+      } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+    }
+    showNotif('Concern updated.','success');
+    editingProblemId=null;
+    currentDetailId=existing?.id||currentDetailId;
+    goTo('detail');
+  } else {
+    const sev=document.getElementById('c-sev').value;
+    const p={
+      id:uid(), problemId: await nextProblemId(),
+      title, description:document.getElementById('c-desc').value,
+      dept, process,
+      category:document.getElementById('c-cat').value,
+      severity:sev,
+      concernPhotos:window._createPhotos,
+      reportedById:currentUser.id,
+      reportedByName:currentUser.name,
+      status:'new',
+      created:Date.now(), updated:Date.now(),
+      cause:{}, countermeasure:{},
+      causePhotos:[], countermeasurePhotos:[], audit:[],
+    };
+    try {
+      const saved = await saveProblem(p);
+      currentDetailId = saved.id || p.id;
+      await addAuditEntry(currentDetailId, 'Concern created by '+currentUser.name);
+      for(const photoSrc of window._createPhotos){
+        await uploadPhoto(currentDetailId, 'concern', photoSrc);
+      }
+    } catch(e){
+      showNotif('Save failed: '+e.message,'error');
+      console.error('submitConcern error:', e);
+      return;
+    }
+    if(sev==='High') showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
+    else showNotif('Concern logged: '+p.problemId,'success');
+    window._createPhotos=[];
+    updateBadges();
+    goTo('detail');
+  }
+}
+
+function cancelCreate(){ editingProblemId=null; goTo('problems'); }
+
+
+// ══════════════════════════════════════════════
+// PROBLEM LIST
+// ══════════════════════════════════════════════
+let listFilter={tab:'all',sev:'',cat:'',search:''};
+
+async function renderProblems(){
+  const ps=await getProblems();
+  if(window._filterSev){ listFilter.sev=window._filterSev; window._filterSev=null; }
+
+  document.getElementById('page-problems').innerHTML=`
+    <div class="flex gap-8 mb-16 flex-wrap">
+      <div class="tabs" style="margin-bottom:0;flex:1;min-width:200px;">
+        <div class="tab ${listFilter.tab==='all'?'active':''}" onclick="setListTab('all')">All</div>
+        <div class="tab ${listFilter.tab==='my'?'active':''}" onclick="setListTab('my')">Mine</div>
+        <div class="tab ${listFilter.tab==='team'?'active':''}" onclick="setListTab('team')">Team</div>
+      </div>
+      <select onchange="listFilter.sev=this.value;renderProblems()" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid var(--border);background:#fff;font-family:var(--sans);font-size:13px;color:var(--text2);">
+        <option value="" ${!listFilter.sev?'selected':''}>All Severity</option>
+        <option value="Low" ${listFilter.sev==='Low'?'selected':''}>Low</option>
+        <option value="Medium" ${listFilter.sev==='Medium'?'selected':''}>Medium</option>
+        <option value="High" ${listFilter.sev==='High'?'selected':''}>High</option>
+      </select>
+      <select onchange="listFilter.cat=this.value;renderProblems()" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid var(--border);background:#fff;font-family:var(--sans);font-size:13px;color:var(--text2);">
+        <option value="" ${!listFilter.cat?'selected':''}>All Categories</option>
+        ${['Quality','Downtime','Safety','Cost'].map(c=>`<option value="${c}" ${listFilter.cat===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Search…" value="${listFilter.search}" oninput="listFilter.search=this.value;renderProblems()" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid var(--border);background:#fff;font-size:13px;min-width:160px;">
+      <button class="btn btn-primary btn-sm" onclick="goTo('create')">+ New</button>
+    </div>
+    <div class="card card-body-p0">
+      ${buildProblemTable(filteredProblems(ps))}
+    </div>
+    <div style="margin-top:1rem;display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  `;
+}
+
+function setListTab(tab){ listFilter.tab=tab; renderProblems(); }
+
+function filteredProblems(ps){
+  let list=ps;
+  if(listFilter.tab==='my') list=list.filter(p=>p.reportedById===currentUser.id);
+  if(listFilter.tab==='team') list=list.filter(p=>p.dept===currentUser.dept);
+  if(listFilter.sev) list=list.filter(p=>p.severity===listFilter.sev);
+  if(listFilter.cat) list=list.filter(p=>p.category===listFilter.cat);
+  if(listFilter.search){
+    const q=listFilter.search.toLowerCase();
+    list=list.filter(p=>(p.title+p.dept+p.problemId+p.category).toLowerCase().includes(q));
+  }
+  return list.sort((a,b)=>b.created-a.created);
+}
+
+function buildProblemTable(ps){
+  if(!ps.length) return '<div class="card-body text-muted text-sm">No problems match the current filters.</div>';
+  return `<table class="data-table"><thead><tr>
+    <th>ID</th><th>Title</th><th>Dept</th><th>Category</th><th>Severity</th><th>Status</th><th>Age</th><th>Completion</th>
+  </tr></thead><tbody>
+  ${ps.map(p=>{
+    const pct=calcProblemCompletion(p);
+    return`<tr onclick="openDetail('${p.id}')">
+      <td><span class="font-mono text-blue text-xs">${p.problemId}</span></td>
+      <td><div style="font-weight:500">${p.title}</div><div class="text-xs text-muted">${p.reportedByName}</div></td>
+      <td class="text-sm">${p.dept}</td>
+      <td><span class="pill ${catClass(p.category)}">${p.category}</span></td>
+      <td><span class="pill ${sevClass(p.severity)}">${p.severity}</span></td>
+      <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
+      <td>${ageChip(p)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div class="progress-wrap" style="width:70px"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span class="text-xs font-mono text-muted">${pct}%</span>
+      </div></td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+function calcProblemCompletion(p){
+  let score=0, max=10;
+  if(p.title) score++;
+  if(p.description) score++;
+  if(p.status!=='new') score++;
+  if(p.cause&&p.cause.description) score++;
+  if(p.cause&&p.cause.type) score++;
+  if(p.cause&&p.cause.tools) score++;
+  if(p.countermeasure&&p.countermeasure.description) score++;
+  if(p.countermeasure&&p.countermeasure.owner) score++;
+  if(p.countermeasure&&p.countermeasure.dueDate) score++;
+  if((p.concernPhotos||[]).length||(p.causePhotos||[]).length||(p.countermeasurePhotos||[]).length) score++;
+  return Math.round(score/max*100);
+}
+
+function openDetail(id){
+  currentDetailId=id;
+  window._activeDetailTab='tab-concern';
+  goTo('detail');
+}
+
+// ══════════════════════════════════════════════
+// PROBLEM DETAIL (3C)
+// ══════════════════════════════════════════════
+async function renderDetail(){
+  if(!currentDetailId){
+    document.getElementById('page-detail').innerHTML='<div style="padding:2rem;color:var(--text2)">No problem selected. <a href="#" onclick="goTo(\'problems\')">Go to Problem List →</a></div>';
+    return;
+  }
+  showLoading('Loading problem…');
+  let p, diagError = null;
+  try {
+    p = await getProblemWithDetails(currentDetailId);
+  } catch(e) {
+    diagError = e.message;
+    p = null;
+  }
+  hideLoading();
+  if(!p){
+    let diagHtml = '';
+    try {
+      const rows = await dbSelect('problems', { id: `eq.${currentDetailId}` });
+      const raw = rows[0];
+      diagHtml = `
+        <div style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:var(--r);font-size:12px;font-family:var(--mono)">
+          <div style="font-weight:600;margin-bottom:.5rem">Diagnostics:</div>
+          <div>currentDetailId: ${currentDetailId}</div>
+          <div>Direct table query: ${raw ? '✓ found — '+raw.title : '✗ not found'}</div>
+          <div>Exception: ${diagError||'none'}</div>
+        </div>`;
+    } catch(diagErr) {
+      diagHtml = `<div style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:var(--r);font-size:12px;font-family:var(--mono)">
+        <div>ID: ${currentDetailId}</div><div>Error: ${diagErr.message}</div></div>`;
+    }
+    document.getElementById('page-detail').innerHTML=`
+      <div style="padding:2rem">
+        <div style="color:var(--red);font-weight:500;margin-bottom:.5rem">Could not load problem</div>
+        <div style="color:var(--text2);font-size:13px;margin-bottom:1rem">Check diagnostics below and share with support.</div>
+        <div style="display:flex;gap:8px;margin-bottom:1rem">
+          <button class="btn btn-ghost btn-sm" onclick="goTo('problems')">← Problem List</button>
+          <button class="btn btn-ghost btn-sm" onclick="renderDetail()">↺ Retry</button>
+        </div>
+        ${diagHtml}
+      </div>`;
+    return;
+  }
+
+  const canEdit = p.status !== 'closed';
+  const canAdvance = p.status !== 'closed';
+  const canClose = ['admin','manager','engineer'].includes(currentUser.role);
+  const canReopen = ['admin','manager','engineer'].includes(currentUser.role);
+  const pct=calcProblemCompletion(p);
+  const actions = await getActions(currentDetailId);
+
+  document.getElementById('page-detail').innerHTML=`
+    <div class="flex items-center gap-12 mb-16 flex-wrap">
+      <span class="font-mono text-blue font-600">${p.problemId}</span>
+      <span class="pill ${sevClass(p.severity)}">${p.severity}</span>
+      <span class="pill ${catClass(p.category)}">${p.category}</span>
+      <span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span>
+      <span class="text-muted text-xs ml-auto">${new Date(p.created).toLocaleString('en-IE')}</span>
+    </div>
+
+    ${buildStepper(p.status)}
+
+    <div class="card mb-16">
+      <div class="card-body" style="padding:.75rem 1.25rem">
+        <div class="flex items-center gap-12">
+          <div style="flex:1">
+            <div class="text-xs text-muted mb-4">Completion</div>
+            <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>
+          </div>
+          <div class="font-mono font-600 text-blue" style="font-size:20px">${pct}%</div>
+          <div class="flex gap-8">
+            ${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editProblem('${p.id}')">Edit Concern</button>`:''}
+            ${canAdvance&&p.status==='new'?`<button class="btn btn-amber btn-sm" onclick="advanceStatus('${p.id}','cause-defined')">Mark Cause Done →</button>`:''}
+            ${canAdvance&&p.status==='cause-defined'?`<button class="btn btn-ghost btn-sm" onclick="advanceStatus('${p.id}','new')">← Reopen Cause</button><button class="btn btn-green btn-sm" onclick="advanceStatus('${p.id}','countermeasure-defined')">Mark CM Done →</button>`:''}
+            ${canAdvance&&p.status==='countermeasure-defined'?`<button class="btn btn-ghost btn-sm" onclick="advanceStatus('${p.id}','cause-defined')">← Reopen CM</button>${canClose?`<button class="btn btn-green btn-sm" onclick="closeProblem('${p.id}')">Close Problem ✓</button>`:''}`:''}
+            ${p.status==='closed'&&canReopen?`<button class="btn btn-amber btn-sm" onclick="reopenProblem('${p.id}')">Reopen Problem</button>`:''}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="detailTab(this,'tab-concern')">C1 — Concern</div>
+      <div class="tab" onclick="detailTab(this,'tab-cause')">C2 — Cause</div>
+      <div class="tab" onclick="detailTab(this,'tab-counter')">C3 — Countermeasure</div>
+      <div class="tab" onclick="detailTab(this,'tab-actions')">Actions (${actions.length})</div>
+      <div class="tab" onclick="detailTab(this,'tab-audit')">Audit Trail</div>
+    </div>
+
+    <div id="tab-concern">
+      <div class="card mb-16">
+        <div class="step-header"><div class="step-badge step-c1">C1</div>
+          <div><div class="step-title">Concern</div><div class="step-sub">Problem definition and impact</div></div></div>
+        <div class="card-body">
+          <div class="form-row form-row-2 mb-12">
+            <div class="field"><label>Problem Description</label>
+              <textarea id="d-concern" ${!canEdit?'disabled':''}>${esc(p.description||'')}</textarea></div>
+            <div class="field">
+              <div class="field mb-8"><label>Impact (units / downtime / € / defects)</label>
+                <input id="d-impact" type="text" value="${esc(p.impact||'')}" placeholder="e.g. 45 defects, €1,200 scrap" ${!canEdit?'disabled':''}></div>
+              <div class="field mb-8"><label>Frequency</label>
+                <input id="d-freq" type="text" value="${esc(p.frequency||'')}" placeholder="e.g. 3x per shift" ${!canEdit?'disabled':''}></div>
+              <div class="field"><label>First Seen Date</label>
+                <input id="d-firstseen" type="date" value="${esc(p.firstSeen||'')}" ${!canEdit?'disabled':''}></div>
+            </div>
+          </div>
+          <div class="form-section-title mt-12">Evidence Photos</div>
+          <div class="photo-grid" id="concern-photos-grid"></div>
+          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-concern')"><span class="icon">📷</span><span>Add Photo</span></button>`:''}
+          ${canEdit?`<div class="flex justify-end mt-16"><button class="btn btn-primary btn-sm" onclick="saveConcernSection('${p.id}')">Save Concern</button></div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-cause" class="hidden">
+      <div class="card mb-16">
+        <div class="step-header"><div class="step-badge step-c2">C2</div>
+          <div><div class="step-title">Cause</div><div class="step-sub">Root cause analysis</div></div></div>
+        <div class="card-body">
+          <div class="field mb-12"><label>Root Cause Description</label>
+            <textarea id="d-cause" ${!canEdit?'disabled':''}>${esc((p.cause||{}).description||'')}</textarea></div>
+          <div class="form-row form-row-2 mb-12">
+            <div class="field"><label>Cause Type (6M)</label>
+              <select id="d-causetype" ${!canEdit?'disabled':''}>
+                ${['','Man','Machine','Method','Material','Measurement','Environment'].map(c=>`<option ${(p.cause||{}).type===c?'selected':''}>${c}</option>`).join('')}
+              </select></div>
+            <div class="field"><label>Analysis Tool</label>
+              <select id="d-causetool" ${!canEdit?'disabled':''}>
+                ${['','5 Whys','Fishbone / Ishikawa','Fault Tree','FMEA','Direct Observation','Other'].map(c=>`<option ${(p.cause||{}).tools===c?'selected':''}>${c}</option>`).join('')}
+              </select></div>
+          </div>
+          <div class="field mb-12"><label>Supporting Evidence</label>
+            <textarea id="d-causeevidence" placeholder="Data, observations, measurements…" ${!canEdit?'disabled':''}>${esc((p.cause||{}).evidence||'')}</textarea></div>
+          <div class="form-section-title">Cause Evidence Photos</div>
+          <div class="photo-grid" id="cause-photos-grid"></div>
+          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause')"><span class="icon">📷</span><span>Add Photo</span></button>`:''}
+          ${canEdit?`<div class="flex justify-end mt-16"><button class="btn btn-primary btn-sm" onclick="saveCauseSection('${p.id}')">Save Cause</button></div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-counter" class="hidden">
+      <div class="card mb-16">
+        <div class="step-header"><div class="step-badge step-c3">C3</div>
+          <div><div class="step-title">Countermeasure</div><div class="step-sub">Corrective and preventive actions</div></div></div>
+        <div class="card-body">
+          <div class="field mb-12"><label>Countermeasure Description</label>
+            <textarea id="d-cm" ${!canEdit?'disabled':''}>${esc((p.countermeasure||{}).description||'')}</textarea></div>
+          <div class="form-row form-row-3 mb-12">
+            <div class="field"><label>Type</label>
+              <select id="d-cmtype" ${!canEdit?'disabled':''}>
+                ${['','Containment','Corrective','Preventive'].map(c=>`<option ${(p.countermeasure||{}).type===c?'selected':''}>${c}</option>`).join('')}
+              </select></div>
+            <div class="field"><label>Owner</label>
+              <select id="d-cmowner" ${!canEdit?'disabled':''}>
+                ${_cache.users.map(u=>`<option value="${u.id}" ${(p.countermeasure||{}).owner===u.id?'selected':''}>${u.name}</option>`).join('')}
+              </select></div>
+            <div class="field"><label>Due Date</label>
+              <input id="d-cmdue" type="date" value="${esc((p.countermeasure||{}).dueDate||'')}" ${!canEdit?'disabled':''}></div>
+          </div>
+          <div class="field mb-12"><label>Status</label>
+            <select id="d-cmstatus" ${!canEdit?'disabled':''}>
+              ${['','Planned','In Progress','Implemented','Verified Effective'].map(c=>`<option ${(p.countermeasure||{}).status===c?'selected':''}>${c}</option>`).join('')}
+            </select></div>
+          <div class="form-section-title">Countermeasure Evidence Photos</div>
+          <div class="photo-grid" id="counter-photos-grid"></div>
+          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-countermeasure')"><span class="icon">📷</span><span>Add Photo</span></button>`:''}
+          ${canEdit?`<div class="flex justify-end mt-16"><button class="btn btn-primary btn-sm" onclick="saveCMSection('${p.id}')">Save Countermeasure</button></div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-actions" class="hidden">
+      <div class="flex justify-end mb-12">
+        <button class="btn btn-primary btn-sm" onclick="openAddActionModal('${p.id}')">+ Add Action</button>
+      </div>
+      <div id="actions-list">
+        ${renderActionsList(actions,p.id)}
+      </div>
+    </div>
+
+    <div id="tab-audit" class="hidden">
+      <div class="card"><div class="card-body">
+        ${(p.audit||[]).length===0?'<div class="text-muted text-sm">No audit entries.</div>':
+          (p.audit||[]).map(a=>`<div class="audit-item">
+            <div class="audit-dot"></div>
+            <div class="audit-content">
+              <div class="audit-action">${a.action}</div>
+              <div class="audit-meta">${a.by} · ${new Date(a.ts).toLocaleString('en-IE')}</div>
+            </div></div>`).join('')}
+      </div></div>
+    </div>
+  `;
+
+  // render photos
+  renderDetailPhotos('concern-photos-grid',p.concernPhotos||[],'concern',p.id,canEdit);
+  renderDetailPhotos('cause-photos-grid',p.causePhotos||[],'cause',p.id,canEdit);
+  renderDetailPhotos('counter-photos-grid',p.countermeasurePhotos||[],'countermeasure',p.id,canEdit);
+
+  // restore active tab
+  const activeTab = window._activeDetailTab || 'tab-concern';
+  const allTabs = ['tab-concern','tab-cause','tab-counter','tab-actions','tab-audit'];
+  const tabLabelMap = {'tab-concern':0,'tab-cause':1,'tab-counter':2,'tab-actions':3,'tab-audit':4};
+  allTabs.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('hidden', id!==activeTab);
+  });
+  const tabEls=document.querySelectorAll('#page-detail .tab');
+  const tabIdx=tabLabelMap[activeTab]||0;
+  tabEls.forEach((t,i)=>t.classList.toggle('active',i===tabIdx));
+}
+
+function detailTab(el,tabId){
+  document.querySelectorAll('#page-detail .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['tab-concern','tab-cause','tab-counter','tab-actions','tab-audit'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('hidden',id!==tabId);
+  });
+  window._activeDetailTab=tabId;
+}
+
+function buildStepper(status){
+  return`<div class="stepper mb-16">
+    ${STATUS_FLOW.map((s,i)=>{
+      const idx=STATUS_FLOW.indexOf(status);
+      const cls=i<idx?'done':i===idx?'active':'pending';
+      const icon=i<idx?'✓ ':'';
+      return`<div class="step-item">
+        <div class="step-node ${cls}">${icon}${STATUS_LABELS[s]}</div>
+        ${i<STATUS_FLOW.length-1?'<div class="step-arrow">›</div>':''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderDetailPhotos(gridId,photos,section,problemId,canEdit){
+  const grid=document.getElementById(gridId);
+  if(!grid) return;
+  grid.innerHTML=photos.map((src,i)=>
+    `<div class="photo-thumb" onclick="openLightboxArr(${i},'${section}','${problemId}')">
+      <img src="${src}">
+      ${canEdit?`<button class="del-btn" onclick="event.stopPropagation();deleteDetailPhoto('${problemId}','${section}',${i})">✕</button>`:''}
+    </div>`
+  ).join('');
+}
+
+async function deleteDetailPhoto(problemId,section,idx){
+  try {
+    const photos = await dbSelect('problem_photos', {
+      problem_id: `eq.${problemId}`, section: `eq.${section}`, order: 'created_at'
+    });
+    if(photos && photos[idx]){
+      await deletePhoto(photos[idx].storage_path, photos[idx].id);
+      await addAuditEntry(problemId, `Photo removed from ${section}`);
+    }
+  } catch(e){ console.warn('deleteDetailPhoto error:', e.message); }
+  window._activeDetailTab = `tab-${section==='countermeasure'?'counter':section}`;
+  renderDetail();
+}
+
+async function addDetailPhoto(section, src){
+  if(!currentDetailId) return;
+  await uploadPhoto(currentDetailId, section, src);
+  await addAuditEntry(currentDetailId, `Photo added to ${section}`);
+  window._activeDetailTab = `tab-${section==='countermeasure'?'counter':section}`;
+  renderDetail();
+}
+
+async function saveConcernSection(id){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  p.description = document.getElementById('d-concern').value;
+  p.impact      = document.getElementById('d-impact').value;
+  p.frequency   = document.getElementById('d-freq').value;
+  p.firstSeen   = document.getElementById('d-firstseen').value;
+  try {
+    await saveProblem(p);
+    await addAuditEntry(id, 'Concern section updated');
+    showNotif('Concern saved.','success'); updateBadges();
+  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  window._activeDetailTab='tab-concern';
+  renderDetail();
+}
+
+async function saveCauseSection(id){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  p.cause = {
+    description: document.getElementById('d-cause').value,
+    type:        document.getElementById('d-causetype').value,
+    tools:       document.getElementById('d-causetool').value,
+    evidence:    document.getElementById('d-causeevidence').value,
+  };
+  try {
+    await saveProblem(p);
+    await addAuditEntry(id, 'Cause section updated');
+    showNotif('Cause saved.','success');
+  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  window._activeDetailTab='tab-cause';
+  renderDetail();
+}
+
+async function saveCMSection(id){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  p.countermeasure = {
+    description: document.getElementById('d-cm').value,
+    type:        document.getElementById('d-cmtype').value,
+    owner:       document.getElementById('d-cmowner').value,
+    dueDate:     document.getElementById('d-cmdue').value,
+    status:      document.getElementById('d-cmstatus').value,
+  };
+  try {
+    await saveProblem(p);
+    await addAuditEntry(id, 'Countermeasure section updated');
+    showNotif('Countermeasure saved.','success');
+  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  window._activeDetailTab='tab-counter';
+  renderDetail();
+}
+
+function editProblem(id){ editingProblemId=id; window._activeDetailTab='tab-concern'; goTo('create'); }
+
+async function reopenProblem(id){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  p.status='countermeasure-defined'; p.closedDate=null;
+  await saveProblem(p);
+  await addAuditEntry(id,'Problem reopened by '+currentUser.name);
+  showNotif('Problem reopened.','warning'); updateBadges(); renderDetail();
+}
+
+async function advanceStatus(id,newStatus){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  p.status=newStatus;
+  await saveProblem(p);
+  await addAuditEntry(id,'Status → '+STATUS_LABELS[newStatus]);
+  showNotif('Status updated.','success'); updateBadges(); renderDetail();
+}
+
+async function closeProblem(id){
+  const p = await getProblemWithDetails(id); if(!p) return;
+  if(!(p.cause&&p.cause.description)){showNotif('Root cause must be defined before closing.','error');return;}
+  if(!(p.countermeasure&&p.countermeasure.description)){showNotif('Countermeasure must be defined before closing.','error');return;}
+  const hasEvidence = p.causePhotos.length || p.countermeasurePhotos.length;
+  if(!hasEvidence){showNotif('Evidence photo required before closing.','error');return;}
+  p.status='closed'; p.closedDate=Date.now();
+  await saveProblem(p);
+  await addAuditEntry(id,'Problem closed by '+currentUser.name);
+  showNotif('Problem closed. ✓','success'); updateBadges(); renderDetail();
+}
+
+// LIGHTBOX
+let _lbPhotos=[]; let _lbIdx=0;
+async function openLightboxArr(idx,section,problemId){
+  const p = await getProblemWithDetails(problemId);
+  _lbPhotos = (p ? p[section+'Photos'] : []) || [];
+  _lbIdx=idx;
+  document.getElementById('lb-img').src=_lbPhotos[idx];
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+function openLightbox(idx,ctx){
+  document.getElementById('lb-img').src=window._createPhotos[idx];
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+function closeLightbox(){ document.getElementById('lightbox').classList.add('hidden'); }
+
+// ══════════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════════
+function renderActionsList(actions,problemId){
+  if(!actions.length) return '<div class="text-muted text-sm">No actions yet. Add one above.</div>';
+  const today=new Date(); today.setHours(0,0,0,0);
+  return actions.map(a=>{
+    const overdue=a.status!=='complete'&&a.dueDate&&new Date(a.dueDate)<today;
+    const cls=a.status==='complete'?'complete':overdue?'overdue':a.status==='in-progress'?'progress':'';
+    return`<div class="action-card ${cls}">
+      <div class="flex items-center gap-8">
+        <div class="action-title flex-1">${a.title}</div>
+        <span class="pill ${a.status==='complete'?'pill-complete':overdue?'pill-overdue':a.status==='in-progress'?'pill-progress':'pill-open'}">${a.status==='in-progress'?'In Progress':a.status.charAt(0).toUpperCase()+a.status.slice(1)}</span>
+      </div>
+      <div class="action-meta">
+        <span>👤 ${a.ownerName || _cache.users.find(u=>u.id===a.owner)?.name || a.owner}</span>
+        <span>📅 ${a.dueDate||'No date'}</span>
+        ${overdue?'<span class="text-red font-600">⚠ Overdue</span>':''}
+      </div>
+      ${a.comments?`<div class="text-sm text-muted mt-8">${a.comments}</div>`:''}
+      <div class="flex gap-8 mt-8">
+        <button class="btn btn-ghost btn-sm" onclick="editActionModal('${a.id}','${problemId}')">Edit</button>
+        ${a.status!=='complete'?`<button class="btn btn-green btn-sm" onclick="completeAction('${a.id}','${problemId}')">Mark Complete</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function renderActions(){
+  const actions=await getActions();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const visible = currentUser.role==='operator'
+    ? actions.filter(a=>a.owner===currentUser.id)
+    : actions;
+  const overdue=visible.filter(a=>a.status!=='complete'&&a.dueDate&&new Date(a.dueDate)<today);
+  const open=visible.filter(a=>a.status==='open');
+  const progress=visible.filter(a=>a.status==='in-progress');
+  const complete=visible.filter(a=>a.status==='complete');
+
+  document.getElementById('page-actions').innerHTML=`
+    <div class="stat-grid mb-16">
+      <div class="stat-card"><div class="stat-val stat-amber">${open.length}</div><div class="stat-label">Open</div></div>
+      <div class="stat-card"><div class="stat-val stat-blue">${progress.length}</div><div class="stat-label">In Progress</div></div>
+      <div class="stat-card"><div class="stat-val stat-green">${complete.length}</div><div class="stat-label">Complete</div></div>
+      <div class="stat-card"><div class="stat-val stat-red">${overdue.length}</div><div class="stat-label">Overdue</div></div>
+    </div>
+    ${overdue.length?`<div class="card mb-16" style="border-left:4px solid var(--red)">
+      <div class="card-header"><div class="card-title text-red">Overdue Actions</div></div>
+      <div class="card-body">${renderActionsList(overdue,'')}</div>
+    </div>`:''}
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">Open & In Progress</div></div>
+      <div class="card-body">${renderActionsList([...open,...progress],'')}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Completed</div></div>
+      <div class="card-body">${complete.length?renderActionsList(complete,''):'<div class="text-muted text-sm">No completed actions.</div>'}</div>
+    </div>
+  `;
+}
+
+function openAddActionModal(problemId){
+  document.getElementById('modal-title').textContent='Add Action';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field mb-12"><label>Action Title *</label><input id="a-title" type="text" placeholder="Specific action required"></div>
+    <div class="form-row form-row-2">
+      <div class="field"><label>Owner *</label>
+        <select id="a-owner">${_cache.users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Due Date *</label><input id="a-due" type="date"></div>
+    </div>
+    <div class="field mt-12"><label>Comments</label><textarea id="a-comment" placeholder="Additional notes…"></textarea></div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveNewAction('${problemId}')">Add Action</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function saveNewAction(problemId){
+  const title=document.getElementById('a-title').value.trim();
+  const owner=document.getElementById('a-owner').value;
+  const due=document.getElementById('a-due').value;
+  if(!title){showNotif('Action title required.','error');return;}
+  if(!owner){showNotif('Owner required.','error');return;}
+  if(!due){showNotif('Due date required.','error');return;}
+  const newAction = {id:aid(),problemId,title,owner,dueDate:due,status:'open',comments:document.getElementById('a-comment').value,created:Date.now()};
+  try {
+    await saveAction(newAction);
+    await addAuditEntry(problemId, 'Action added: '+title);
+  } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+  closeModal(); showNotif('Action added.','success'); updateBadges();
+  window._activeDetailTab='tab-actions';
+  renderDetail();
+}
+
+async function editActionModal(actionId,problemId){
+  const actions = await getActions(problemId);
+  const a = actions.find(x=>x.id===actionId); if(!a) return;
+  document.getElementById('modal-title').textContent='Edit Action';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field mb-12"><label>Action Title</label><input id="a-title" type="text" value="${esc(a.title)}"></div>
+    <div class="form-row form-row-2">
+      <div class="field"><label>Owner</label>
+        <select id="a-owner">${_cache.users.map(u=>`<option value="${u.id}" ${a.owner===u.id?'selected':''}>${u.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Due Date</label><input id="a-due" type="date" value="${a.dueDate||''}"></div>
+    </div>
+    <div class="field mt-12"><label>Status</label>
+      <select id="a-status">
+        ${['open','in-progress','complete'].map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s==='in-progress'?'In Progress':s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+      </select></div>
+    <div class="field mt-12"><label>Comments</label><textarea id="a-comment">${esc(a.comments||'')}</textarea></div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteActionById('${actionId}','${problemId}')">Delete</button>
+    <button class="btn btn-primary" onclick="updateAction('${actionId}','${problemId}')">Save</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function updateAction(actionId,problemId){
+  const actions = await getActions(problemId);
+  const a = actions.find(x=>x.id===actionId); if(!a) return;
+  a.title   = document.getElementById('a-title').value;
+  a.owner   = document.getElementById('a-owner').value;
+  a.dueDate = document.getElementById('a-due').value;
+  a.status  = document.getElementById('a-status').value;
+  a.comments= document.getElementById('a-comment').value;
+  try { await saveAction(a); } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+  closeModal(); showNotif('Action updated.','success'); updateBadges();
+  if(currentDetailId) renderDetail(); else renderActions();
+}
+
+async function deleteActionById(actionId,problemId){
+  if(!confirm('Delete this action?')) return;
+  try { await deleteAction(actionId); } catch(e){ showNotif('Delete failed: '+e.message,'error'); return; }
+  closeModal(); showNotif('Action deleted.'); updateBadges();
+  if(currentDetailId) renderDetail(); else renderActions();
+}
+
+async function completeAction(actionId,problemId){
+  const actions = await getActions(problemId);
+  const a = actions.find(x=>x.id===actionId); if(!a) return;
+  a.status='complete'; a.completedDate=Date.now();
+  try {
+    await saveAction(a);
+    await addAuditEntry(problemId, 'Action completed: '+a.title);
+  } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+  showNotif('Action marked complete. ✓','success'); updateBadges();
+  if(currentDetailId) renderDetail(); else renderActions();
+}
+
+function closeModal(){ document.getElementById('modal-bg').classList.add('hidden'); }
+
+// ══════════════════════════════════════════════
+// ANALYTICS
+// ══════════════════════════════════════════════
+async function renderAnalytics(){
+  const ps=await getProblems();
+  const actions=await getActions();
+  const total=ps.length, closed=ps.filter(p=>p.status==='closed').length;
+  const avgClose=calcAvgClose(ps);
+  const actionComplete=actions.filter(a=>a.status==='complete').length;
+  const actionRate=actions.length?Math.round(actionComplete/actions.length*100):0;
+
+  // Category pareto
+  const byCat={};ps.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+1;});
+  const catSorted=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const maxCat=catSorted[0]?catSorted[0][1]:1;
+
+  // Dept pareto
+  const byDept={};ps.forEach(p=>{byDept[p.dept]=(byDept[p.dept]||0)+1;});
+  const deptSorted=Object.entries(byDept).sort((a,b)=>b[1]-a[1]);
+  const maxDept=deptSorted[0]?deptSorted[0][1]:1;
+
+  // Ageing
+  const buckets={'0-7d':0,'8-14d':0,'15-30d':0,'>30d':0};
+  ps.filter(p=>p.status!=='closed').forEach(p=>{
+    const d=Math.floor((Date.now()-p.created)/86400000);
+    if(d<=7) buckets['0-7d']++; else if(d<=14) buckets['8-14d']++;
+    else if(d<=30) buckets['15-30d']++; else buckets['>30d']++;
+  });
+
+  // Recurring issues (title similarity - simple keyword match)
+  const repeats={};
+  ps.forEach(p=>{const k=p.dept+'-'+p.category;repeats[k]=(repeats[k]||0)+1;});
+  const repeatIssues=Object.entries(repeats).filter(([k,v])=>v>1).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  document.getElementById('page-analytics').innerHTML=`
+    <div class="stat-grid mb-24">
+      <div class="stat-card"><div class="stat-val stat-blue">${total}</div><div class="stat-label">Total Problems</div></div>
+      <div class="stat-card"><div class="stat-val stat-green">${closed}</div><div class="stat-label">Closed</div></div>
+      <div class="stat-card"><div class="stat-val stat-blue">${total?Math.round(closed/total*100):0}%</div><div class="stat-label">Closure Rate</div></div>
+      <div class="stat-card"><div class="stat-val stat-blue">${avgClose}</div><div class="stat-label">Avg Days to Close</div></div>
+      <div class="stat-card"><div class="stat-val stat-green">${actionRate}%</div><div class="stat-label">Action Completion</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Problems by Category (Pareto)</div></div>
+        <div class="card-body">
+          ${catSorted.map(([k,v])=>`<div class="pareto-bar-wrap mb-8">
+            <div class="pareto-label text-sm">${k}</div>
+            <div class="pareto-track"><div class="pareto-fill" style="width:${Math.round(v/maxCat*100)}%"><span class="pareto-val">${v}</span></div></div>
+            <div class="pareto-pct">${total?Math.round(v/total*100):0}%</div>
+          </div>`).join('')||'<div class="text-muted text-sm">No data</div>'}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Problems by Department</div></div>
+        <div class="card-body">
+          ${deptSorted.map(([k,v])=>`<div class="pareto-bar-wrap mb-8">
+            <div class="pareto-label text-sm">${k}</div>
+            <div class="pareto-track"><div class="pareto-fill" style="width:${Math.round(v/maxDept*100)}%"><span class="pareto-val">${v}</span></div></div>
+            <div class="pareto-pct">${total?Math.round(v/total*100):0}%</div>
+          </div>`).join('')||'<div class="text-muted text-sm">No data</div>'}
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Open Problem Ageing</div></div>
+        <div class="card-body">
+          ${Object.entries(buckets).map(([k,v])=>{
+            const cls=k==='>30d'?'var(--red)':k==='15-30d'?'var(--amber)':'var(--blue)';
+            const max=Math.max(...Object.values(buckets),1);
+            return`<div class="pareto-bar-wrap mb-8">
+              <div class="pareto-label text-sm">${k}</div>
+              <div class="pareto-track"><div class="pareto-fill" style="width:${Math.round(v/max*100)}%;background:${cls}"><span class="pareto-val">${v}</span></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Recurring Issue Patterns</div></div>
+        <div class="card-body">
+          ${repeatIssues.length?repeatIssues.map(([k,v])=>`<div class="pareto-bar-wrap mb-8">
+            <div class="pareto-label text-sm">${k}</div>
+            <div class="pareto-track"><div class="pareto-fill" style="background:var(--amber)"><span class="pareto-val">${v}x</span></div></div>
+          </div>`).join(''):'<div class="text-muted text-sm">No recurring patterns detected.</div>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-12 justify-end">
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="exportPDF()">⬇ Export PDF</button>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════════════
+async function renderAdmin(){
+  if(!['admin','manager'].includes(currentUser.role)){
+    document.getElementById('page-admin').innerHTML='<div class="text-muted">Access denied.</div>'; return;
+  }
+  const ps=await getProblems();
+  const users=await getUsers();
+  const isAdmin=currentUser.role==='admin';
+  document.getElementById('page-admin').innerHTML=`
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">User Accounts</div>
+        ${isAdmin?`<button class="btn btn-primary btn-sm ml-auto" onclick="openAddUserModal()">+ Add User</button>`:''}
+      </div>
+      <div class="card-body-p0">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Dept</th><th>Reports</th>${isAdmin?'<th>Actions</th>':''}</tr></thead>
+          <tbody>
+          ${users.map(u=>`<tr>
+            <td><div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:30px;height:30px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--blue);flex-shrink:0">${u.initials}</div>
+              <div style="font-weight:500">${u.name}</div>
+              ${u.mustChangePassword?'<span style="font-size:10px;background:var(--amber-bg);color:var(--amber);padding:2px 6px;border-radius:99px;border:1px solid #fde68a">temp pw</span>':''}
+            </div></td>
+            <td class="font-mono text-sm text-muted">${u.username}</td>
+            <td><span class="pill pill-${u.role==='admin'?'closed':u.role==='manager'?'cause':u.role==='engineer'?'validated':'new'}">${u.role}</span></td>
+            <td class="text-sm">${u.dept}</td>
+            <td class="font-mono text-sm">${ps.filter(p=>p.reportedById===u.id).length}</td>
+            ${isAdmin?`<td><div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.id}')">Edit</button>
+              <button class="btn btn-ghost btn-sm" onclick="openResetPwModal('${u.id}')">Reset PW</button>
+              ${u.id!==currentUser.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">✕</button>`:''}
+            </div></td>`:''}
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">System Settings</div></div>
+      <div class="card-body">
+        <div class="form-row form-row-2 mb-12">
+          <div class="field"><label>Problem Ageing Threshold (days)</label><input id="set-age" type="number" value="${localStorage.getItem('3c_set_age')||14}" placeholder="14"></div>
+          <div class="field"><label>High Severity Containment SLA (hours)</label><input id="set-sla" type="number" value="${localStorage.getItem('3c_set_sla')||24}" placeholder="24"></div>
+        </div>
+        <div class="flex justify-end"><button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Settings</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">All Problems</div></div>
+      <div class="card-body-p0">${buildProblemTable(ps)}</div>
+    </div>
+  `;
+}
+
+function saveSettings(){
+  localStorage.setItem('3c_set_age',document.getElementById('set-age').value);
+  localStorage.setItem('3c_set_sla',document.getElementById('set-sla').value);
+  showNotif('Settings saved.','success');
+}
+
+async function openAddUserModal(){
+  const depts = await getStoredDepts();
+  document.getElementById('modal-title').textContent='Add New User';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="form-row form-row-2 mb-12">
+      <div class="field"><label>Full Name *</label><input id="u-name" type="text" placeholder="e.g. Sean Flynn"></div>
+      <div class="field"><label>Username * <span style="font-size:11px;color:var(--text3)">(e.g. sflynn)</span></label><input id="u-uname" type="text" placeholder="sflynn" style="text-transform:lowercase" oninput="this.value=this.value.toLowerCase()"></div>
+    </div>
+    <div class="form-row form-row-2 mb-12">
+      <div class="field"><label>Role *</label>
+        <select id="u-role">
+          ${['operator','engineer','manager','admin'].map(r=>`<option value="${r}">${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Department</label>
+        <select id="u-dept">${depts.map(d=>`<option>${d}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Temporary Password *</label><input id="u-pass" type="text" placeholder="Min. 6 characters"></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px;">User will be required to change this password on first login.</div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="addUser()">Add User</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function addUser(){
+  const name     = document.getElementById('u-name').value.trim();
+  const username = document.getElementById('u-uname').value.trim().toLowerCase();
+  const role     = document.getElementById('u-role').value;
+  const dept     = document.getElementById('u-dept').value;
+  const pass     = document.getElementById('u-pass').value;
+  if(!name||!username||!pass){showNotif('Name, username and password are required.','error');return;}
+  if(pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
+  const users = await getUsers();
+  if(users.find(u=>u.username===username)){showNotif('Username already exists.','error');return;}
+  closeModal();
+  showNotif(`To add ${username}: Supabase → Auth → Users → Add user. Email: ${username}@3capp.local, Password: ${pass}. Then run fix-auth.sql.`,'warning');
+}
+
+async function openEditUserModal(uid){
+  const users = await getUsers();
+  const u = users.find(x=>x.id===uid); if(!u) return;
+  const depts = await getStoredDepts();
+  document.getElementById('modal-title').textContent='Edit User';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="form-row form-row-2 mb-12">
+      <div class="field"><label>Full Name</label><input id="eu-name" type="text" value="${esc(u.name)}"></div>
+      <div class="field"><label>Username</label><input id="eu-uname" type="text" value="${esc(u.username)}" style="text-transform:lowercase" oninput="this.value=this.value.toLowerCase()"></div>
+    </div>
+    <div class="form-row form-row-2 mb-12">
+      <div class="field"><label>Role</label>
+        <select id="eu-role">
+          ${['operator','engineer','manager','admin'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('')}
+        </select></div>
+      <div class="field"><label>Department</label>
+        <select id="eu-dept">${depts.map(d=>`<option ${u.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEditUser('${uid}')">Save</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function saveEditUser(uid){
+  const name     = document.getElementById('eu-name').value.trim();
+  const username = document.getElementById('eu-uname').value.trim().toLowerCase();
+  if(!name||!username){showNotif('Name and username required.','error');return;}
+  const users = await getUsers();
+  const conflict = users.find(u=>u.username===username&&u.id!==uid);
+  if(conflict){showNotif('Username already taken.','error');return;}
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  try {
+    await saveUserProfile(uid, {
+      name, username,
+      role: document.getElementById('eu-role').value,
+      dept: document.getElementById('eu-dept').value,
+      initials,
+    });
+    if(currentUser.id===uid){
+      currentUser = {...currentUser, name, username, initials,
+        role: document.getElementById('eu-role').value,
+        dept: document.getElementById('eu-dept').value};
+      document.getElementById('sb-name').textContent = currentUser.name;
+      document.getElementById('sb-avatar').textContent = currentUser.initials;
+    }
+    closeModal();
+    showNotif('User updated.','success');
+    renderAdmin();
+  } catch(e){ showNotif('Update failed: '+e.message,'error'); }
+}
+
+async function openResetPwModal(uid){
+  const users = await getUsers();
+  const u = users.find(x=>x.id===uid); if(!u) return;
+  document.getElementById('modal-title').textContent=`Reset Password — ${u.name}`;
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field"><label>Temporary Password</label>
+      <input id="rp-pass" type="text" placeholder="Enter temporary password (min. 6 chars)"></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px;">User will be required to change this on next login.</div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="resetUserPassword('${uid}')">Set Password</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function resetUserPassword(uid){
+  const pass = document.getElementById('rp-pass').value;
+  if(!pass||pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
+  try {
+    await dbUpdate('profiles', {must_change_password:true}, 'id', uid);
+    await getUsers();
+    closeModal();
+    showNotif(`Run in Supabase SQL Editor: UPDATE auth.users SET encrypted_password = crypt('${pass}', gen_salt('bf')) WHERE id = '${uid}';`,'warning');
+    renderAdmin();
+  } catch(e){ showNotif('Error: '+e.message,'error'); }
+}
+
+async function deleteUser(uid){
+  if(!confirm('Delete this user? Their reports will remain.')) return;
+  try {
+    await dbDelete('profiles', 'id', uid);
+    await getUsers();
+    showNotif('Profile deleted. Remove auth user in Supabase Dashboard → Authentication → Users.','warning');
+    renderAdmin();
+  } catch(e){ showNotif('Delete failed: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// PROFILE
+// ══════════════════════════════════════════════
+async function renderProfile(){
+  const ps=await getProblems();
+  const mine=ps.filter(p=>p.reportedById===currentUser.id);
+  document.getElementById('page-profile').innerHTML=`
+    <div class="card mb-16">
+      <div class="card-body">
+        <div class="flex items-center gap-16 mb-16">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--blue)">${currentUser.initials}</div>
+          <div>
+            <div style="font-size:20px;font-weight:600">${currentUser.name}</div>
+            <div class="text-muted text-sm font-mono">${currentUser.username}</div>
+            <div class="mt-4"><span class="pill pill-validated">${currentUser.role}</span></div>
+          </div>
+          <button class="btn btn-ghost btn-sm ml-auto" onclick="openChangeMyPassword()">Change Password</button>
+        </div>
+        <div class="form-row form-row-2">
+          <div class="field"><label>Full Name</label><input type="text" value="${currentUser.name}" disabled></div>
+          <div class="field"><label>Username</label><input type="text" value="${currentUser.username}" disabled></div>
+          <div class="field"><label>Department</label><input type="text" value="${currentUser.dept}" disabled></div>
+          <div class="field"><label>Role</label><input type="text" value="${currentUser.role}" disabled></div>
+        </div>
+      </div>
+    </div>
+    <div class="stat-grid mb-16">
+      <div class="stat-card"><div class="stat-val stat-blue">${mine.length}</div><div class="stat-label">My Problems</div></div>
+      <div class="stat-card"><div class="stat-val stat-amber">${mine.filter(p=>p.status!=='closed').length}</div><div class="stat-label">Open</div></div>
+      <div class="stat-card"><div class="stat-val stat-green">${mine.filter(p=>p.status==='closed').length}</div><div class="stat-label">Closed</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">My Recent Problems</div></div>
+      <div class="card-body-p0">${buildProblemTable(mine.sort((a,b)=>b.created-a.created).slice(0,10))}</div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════
+async function exportCSV(){
+  showLoading('Preparing CSV…');
+  const ps = await getProblems();
+  const headers=['ID','Title','Department','Process','Category','Severity','Status','Reporter','Created','Closed','Days Open','Root Cause','Countermeasure','CM Status'];
+  const rows=ps.map(p=>{
+    const daysOpen=p.status==='closed'&&p.closedDate
+      ?Math.floor((p.closedDate-p.created)/86400000)
+      :Math.floor((Date.now()-p.created)/86400000);
+    const csvCell=v=>'"'+(String(v||'').replace(/"/g,'""'))+'"';
+    return[
+      p.problemId,
+      csvCell(p.title),
+      csvCell(p.dept),
+      csvCell(p.process),
+      p.category,
+      p.severity,
+      STATUS_LABELS[p.status],
+      csvCell(p.reportedByName),
+      new Date(p.created).toLocaleDateString('en-IE'),
+      p.closedDate?new Date(p.closedDate).toLocaleDateString('en-IE'):'',
+      daysOpen,
+      csvCell((p.cause||{}).description),
+      csvCell((p.countermeasure||{}).description),
+      csvCell((p.countermeasure||{}).status),
+    ].join(',');
+  });
+  const bom='\uFEFF'; // UTF-8 BOM for Excel compatibility
+  const csv=bom+[headers.map(h=>'"'+h+'"').join(','),...rows].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='3c_problems_'+new Date().toISOString().split('T')[0]+'.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+  hideLoading();
+  showNotif('CSV exported — check your downloads.','success');
+}
+
+async function exportPDF(){
+  showLoading('Building PDF…');
+  const ps = await getProblems();
+  const actions = await getActions();
+  const dateStr=new Date().toLocaleDateString('en-IE',{day:'2-digit',month:'short',year:'numeric'});
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>3C Report — ${dateStr}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;color:#1a1d23;line-height:1.5;}
+    .page-header{background:#1a5fb4;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;}
+    .page-header h1{font-size:18px;font-weight:600;}
+    .page-header .sub{font-size:12px;opacity:.8;}
+    .summary{display:flex;gap:12px;padding:12px 20px;background:#f4f5f7;border-bottom:1px solid #dde1e7;}
+    .sum-item{text-align:center;flex:1;}
+    .sum-val{font-size:22px;font-weight:600;}
+    .sum-label{font-size:10px;color:#5a6072;text-transform:uppercase;letter-spacing:.04em;}
+    .problem{padding:16px 20px;border-bottom:2px solid #dde1e7;page-break-inside:avoid;}
+    .problem-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+    .prob-id{font-family:monospace;font-size:12px;color:#1a5fb4;font-weight:600;}
+    .prob-title{font-size:14px;font-weight:600;flex:1;}
+    .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;border:1px solid;}
+    .pill-sev-High{background:#fdecea;color:#c0392b;border-color:#fca5a5;}
+    .pill-sev-Medium{background:#fef3c7;color:#b45309;border-color:#fde68a;}
+    .pill-sev-Low{background:#dcfce7;color:#166534;border-color:#bbf7d0;}
+    .pill-closed{background:#dcfce7;color:#166534;border-color:#86efac;}
+    .pill-open{background:#fef3c7;color:#92400e;border-color:#fde68a;}
+    .three-c{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;}
+    .c-block{border:1px solid #dde1e7;border-radius:6px;padding:10px;}
+    .c-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+    .c1-label{color:#1a5fb4;}.c2-label{color:#b45309;}.c3-label{color:#166534;}
+    .c-field{margin-bottom:4px;}.c-key{font-size:9px;color:#9aa0b0;text-transform:uppercase;}.c-val{font-size:11px;}
+    .meta-row{display:flex;gap:16px;font-size:11px;color:#5a6072;margin-bottom:8px;}
+    .actions-block{margin-top:8px;border-top:1px solid #dde1e7;padding-top:8px;}
+    .action-row{display:flex;gap:8px;align-items:center;padding:3px 0;font-size:11px;}
+    .act-status{width:70px;flex-shrink:0;}
+    footer{text-align:center;padding:12px;font-size:10px;color:#9aa0b0;border-top:1px solid #dde1e7;margin-top:20px;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+  <div class="page-header">
+    <div><h1>3C Problem Report</h1><div class="sub">Generated ${dateStr} by ${currentUser.name}</div></div>
+    <div style="text-align:right"><div style="font-size:24px;font-weight:700;opacity:.4">3C</div></div>
+  </div>
+  <div class="summary">
+    <div class="sum-item"><div class="sum-val" style="color:#1a5fb4">${ps.length}</div><div class="sum-label">Total</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#b45309">${ps.filter(p=>p.status!=='closed').length}</div><div class="sum-label">Open</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#166534">${ps.filter(p=>p.status==='closed').length}</div><div class="sum-label">Closed</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#c0392b">${ps.filter(p=>p.severity==='High'&&p.status!=='closed').length}</div><div class="sum-label">High Open</div></div>
+  </div>
+  ${ps.map(p=>{
+    const pActions=actions.filter(a=>a.problemId===p.id);
+    const age=p.status==='closed'&&p.closedDate?Math.floor((p.closedDate-p.created)/86400000):Math.floor((Date.now()-p.created)/86400000);
+    return`<div class="problem">
+      <div class="problem-header">
+        <span class="prob-id">${p.problemId}</span>
+        <span class="prob-title">${p.title}</span>
+        <span class="pill pill-sev-${p.severity}">${p.severity}</span>
+        <span class="pill ${p.status==='closed'?'pill-closed':'pill-open'}">${STATUS_LABELS[p.status]}</span>
+      </div>
+      <div class="meta-row">
+        <span>📍 ${p.dept}${p.process?' · '+p.process:''}</span>
+        <span>🏷 ${p.category}</span>
+        <span>👤 ${p.reportedByName}</span>
+        <span>📅 ${new Date(p.created).toLocaleDateString('en-IE')}</span>
+        <span>⏱ ${age} day${age!==1?'s':''}</span>
+      </div>
+      <div class="three-c">
+        <div class="c-block">
+          <div class="c-label c1-label">C1 — Concern</div>
+          <div class="c-field"><div class="c-key">Description</div><div class="c-val">${p.description||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Impact</div><div class="c-val">${p.impact||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Frequency</div><div class="c-val">${p.frequency||'—'}</div></div>
+        </div>
+        <div class="c-block">
+          <div class="c-label c2-label">C2 — Cause</div>
+          <div class="c-field"><div class="c-key">Root Cause</div><div class="c-val">${(p.cause||{}).description||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Type</div><div class="c-val">${(p.cause||{}).type||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Tool</div><div class="c-val">${(p.cause||{}).tools||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Evidence</div><div class="c-val">${(p.cause||{}).evidence||'—'}</div></div>
+        </div>
+        <div class="c-block">
+          <div class="c-label c3-label">C3 — Countermeasure</div>
+          <div class="c-field"><div class="c-key">Description</div><div class="c-val">${(p.countermeasure||{}).description||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Type</div><div class="c-val">${(p.countermeasure||{}).type||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Owner</div><div class="c-val">${(_cache.users||[]).find(u=>u.id===(p.countermeasure||{}).owner)?.name||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Due</div><div class="c-val">${(p.countermeasure||{}).dueDate||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Status</div><div class="c-val">${(p.countermeasure||{}).status||'—'}</div></div>
+        </div>
+      </div>
+      ${pActions.length?`<div class="actions-block"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#9aa0b0;margin-bottom:4px">Actions (${pActions.length})</div>
+        ${pActions.map(a=>`<div class="action-row">
+          <span class="act-status" style="color:${a.status==='complete'?'#166534':a.status==='in-progress'?'#1a5fb4':'#b45309'}">${a.status==='in-progress'?'In Progress':a.status.charAt(0).toUpperCase()+a.status.slice(1)}</span>
+          <span style="flex:1">${a.title}</span>
+          <span style="color:#9aa0b0">${(_cache.users||[]).find(u=>u.id===a.owner)?.name||'—'}</span>
+          <span style="color:#9aa0b0;width:80px;text-align:right">${a.dueDate||''}</span>
+        </div>`).join('')}
+      </div>`:''}
+    </div>`;
+  }).join('')}
+  <footer>3C Problem Solver · Exported ${dateStr} · ${ps.length} record${ps.length!==1?'s':''}</footer>
+  </body></html>`;
+
+  const w=window.open('','_blank','width=900,height=700');
+  if(!w){showNotif('Pop-up blocked — please allow pop-ups to export PDF.','error');return;}
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.onload=()=>{ setTimeout(()=>{ w.focus(); w.print(); },300); };
+  hideLoading();
+  showNotif('PDF ready — use your browser print dialog to save.','success');
+}
+
+
+// ══════════════════════════════════════════════
+// POWER BI INTEGRATION
+// ══════════════════════════════════════════════
+function getPBIConfig(){ return JSON.parse(localStorage.getItem('3c_pbi_config')||'{}'); }
+function savePBIConfig(c){ localStorage.setItem('3c_pbi_config',JSON.stringify(c)); }
+
+function renderPowerBI(){
+  const cfg = getPBIConfig();
+  const isConnected = !!(cfg.tenantId && cfg.clientId && cfg.workspaceId && cfg.reportId && cfg.embedToken);
+  const activeTab = window._pbiTab || 'export';
+
+  document.getElementById('page-powerbi').innerHTML=`
+    <div class="pbi-status ${isConnected?'connected':'disconnected'}">
+      <span style="font-size:16px">${isConnected?'🟢':'⚪'}</span>
+      ${isConnected
+        ? `Power BI connected — workspace <strong>${cfg.workspaceId.slice(0,8)}…</strong>`
+        : `Power BI not connected yet — export your data below or complete setup to embed live reports`}
+    </div>
+
+    <div class="pbi-tab-bar">
+      <div class="pbi-tab ${activeTab==='export'?'active':''}" onclick="pbiTab('export')">📤 Data Export</div>
+      <div class="pbi-tab ${activeTab==='setup'?'active':''}" onclick="pbiTab('setup')">🔧 Azure Setup Guide</div>
+      <div class="pbi-tab ${activeTab==='embed'?'active':''}" onclick="pbiTab('embed')">📊 Embed Config</div>
+      ${isConnected?`<div class="pbi-tab ${activeTab==='live'?'active':''}" onclick="pbiTab('live')">▶ Live Report</div>`:''}
+    </div>
+
+    <div id="pbi-panel-export" class="${activeTab==='export'?'':'hidden'}">
+      ${renderPBIExportPanel()}
+    </div>
+    <div id="pbi-panel-setup" class="${activeTab==='setup'?'':'hidden'}">
+      ${renderPBISetupGuide()}
+    </div>
+    <div id="pbi-panel-embed" class="${activeTab==='embed'?'':'hidden'}">
+      ${renderPBIEmbedConfig(cfg)}
+    </div>
+    ${isConnected?`<div id="pbi-panel-live" class="${activeTab==='live'?'':'hidden'}">
+      ${renderPBILivePanel(cfg)}
+    </div>`:''}
+  `;
+}
+
+function pbiTab(tab){
+  window._pbiTab=tab;
+  ['export','setup','embed','live'].forEach(t=>{
+    const p=document.getElementById('pbi-panel-'+t);
+    if(p) p.classList.toggle('hidden',t!==tab);
+  });
+  document.querySelectorAll('.pbi-tab').forEach((el,i)=>{
+    el.classList.toggle('active',el.textContent.toLowerCase().includes(tab==='export'?'data':tab==='setup'?'azure':tab==='embed'?'embed':'live'));
+  });
+  // simpler re-render of tab bar
+  renderPowerBI();
+}
+
+// ── EXPORT PANEL ──
+function renderPBIExportPanel(){
+  const datasets = buildPBIDatasets();
+  return`
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">Power BI Push Dataset — JSON Export</div>
+        <button class="btn btn-primary btn-sm ml-auto" onclick="downloadAllPBIData()">⬇ Download All JSON</button>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-16">These datasets are structured to match the <strong>Power BI Push Dataset REST API</strong> schema exactly. You can paste each one into Power BI Desktop, use the REST API to push automatically, or import via Power Query.</p>
+
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;">
+          <span class="metric-badge">📈 Open vs Closed Trend</span>
+          <span class="metric-badge">🏷 Category Pareto</span>
+          <span class="metric-badge">🏭 By Department</span>
+          <span class="metric-badge">⏱ Avg Time to Close</span>
+          <span class="metric-badge">✅ Action Completion</span>
+        </div>
+
+        ${datasets.map((ds,i)=>`
+          <div class="dataset-block">
+            <div class="dataset-title">
+              <span>${ds.icon}</span> ${ds.name}
+              <span class="text-xs text-muted">${ds.rows.length} row${ds.rows.length!==1?'s':''}</span>
+              <button class="copy-btn" onclick="copyDataset(${i})">Copy JSON</button>
+              <button class="copy-btn" onclick="downloadDataset(${i})">⬇ Download</button>
+            </div>
+            <div class="dataset-preview" id="ds-preview-${i}">${JSON.stringify({tableName:ds.name,rows:ds.rows.slice(0,2)},null,2)}${ds.rows.length>2?'\n  … '+( ds.rows.length-2)+' more rows':''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">How to import into Power BI</div></div>
+      <div class="card-body">
+        <div class="pbi-step">
+          <div class="pbi-step-num">1</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Download the JSON export</div>
+            <div class="pbi-step-sub">Click "Download All JSON" above. This creates a file with all 5 datasets in Power BI Push Dataset format.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">2</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Open Power BI Desktop → Get Data → Web / JSON</div>
+            <div class="pbi-step-sub">Open Power BI Desktop (free download from microsoft.com/powerbi). Choose <em>Get Data → JSON</em> and point it to the downloaded file. Each dataset becomes a table.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">3</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Build your visuals</div>
+            <div class="pbi-step-sub">Use the pre-structured columns to build: Line chart (Open vs Closed over time), Bar chart (by Category), Donut (by Department), KPI card (Avg close days), Gauge (Action completion %). All column names are pre-labelled to match Power BI field expectations.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">4</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Publish and schedule refresh (optional)</div>
+            <div class="pbi-step-sub">Publish to Power BI Service. Then use the <em>Power BI Push Dataset REST API</em> or a scheduled script to push fresh data from this app automatically — once you have Azure set up (see the Setup Guide tab).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Push Dataset REST API — ready-to-use endpoint calls</div>
+        <button class="copy-btn ml-auto" onclick="copyPushAPICode()">Copy code</button>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-12">Once you have your Azure credentials and a dataset created in Power BI, paste this code into a Node.js script or Azure Function to auto-push on a schedule.</p>
+        <div class="dataset-preview" id="push-api-code" style="max-height:280px">${buildPushAPISnippet()}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function buildPBIDatasets(){
+  const ps=await getProblems();
+  const actions=await getActions();
+  const today=new Date();
+
+  // 1. Open vs Closed Trend — by month
+  const trendMap={};
+  ps.forEach(p=>{
+    const d=new Date(p.created);
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    if(!trendMap[key]) trendMap[key]={Month:key,Opened:0,Closed:0};
+    trendMap[key].Opened++;
+    if(p.status==='closed'&&p.closedDate){
+      const cd=new Date(p.closedDate);
+      const ck=cd.getFullYear()+'-'+String(cd.getMonth()+1).padStart(2,'0');
+      if(!trendMap[ck]) trendMap[ck]={Month:ck,Opened:0,Closed:0};
+      trendMap[ck].Closed++;
+    }
+  });
+  const trendRows=Object.values(trendMap).sort((a,b)=>a.Month.localeCompare(b.Month));
+
+  // 2. Category Pareto
+  const catMap={};
+  ps.forEach(p=>{catMap[p.category]=(catMap[p.category]||{Category:p.category,Total:0,Open:0,Closed:0});catMap[p.category].Total++;if(p.status==='closed')catMap[p.category].Closed++;else catMap[p.category].Open++;});
+  const catRows=Object.values(catMap).sort((a,b)=>b.Total-a.Total);
+
+  // 3. By Department
+  const deptMap={};
+  ps.forEach(p=>{if(!deptMap[p.dept])deptMap[p.dept]={Department:p.dept,Total:0,Open:0,Closed:0,HighSeverity:0};deptMap[p.dept].Total++;if(p.status==='closed')deptMap[p.dept].Closed++;else deptMap[p.dept].Open++;if(p.severity==='High')deptMap[p.dept].HighSeverity++;});
+  const deptRows=Object.values(deptMap).sort((a,b)=>b.Total-a.Total);
+
+  // 4. Avg Time to Close — by month and category
+  const closeRows=ps.filter(p=>p.status==='closed'&&p.closedDate).map(p=>{
+    const days=Math.round((p.closedDate-p.created)/86400000);
+    const d=new Date(p.created);
+    return{ProblemID:p.problemId,Title:p.title,Department:p.dept,Category:p.category,Severity:p.severity,CreatedDate:new Date(p.created).toISOString().split('T')[0],ClosedDate:new Date(p.closedDate).toISOString().split('T')[0],DaysToClose:days};
+  });
+
+  // 5. Action Completion Rate — by owner
+  const ownerMap={};
+  actions.forEach(a=>{
+    const user=(_cache.users||[]).find(u=>u.id===a.owner);
+    const name=user?user.name:'Unknown';
+    if(!ownerMap[name])ownerMap[name]={Owner:name,Total:0,Complete:0,InProgress:0,Open:0,Overdue:0};
+    ownerMap[name].Total++;
+    if(a.status==='complete')ownerMap[name].Complete++;
+    else if(a.status==='in-progress')ownerMap[name].InProgress++;
+    else ownerMap[name].Open++;
+    if(a.status!=='complete'&&a.dueDate&&new Date(a.dueDate)<today)ownerMap[name].Overdue++;
+  });
+  const actionRows=Object.values(ownerMap).map(r=>({...r,CompletionRate:r.Total?Math.round(r.Complete/r.Total*100):0}));
+
+  return[
+    {name:'Open_vs_Closed_Trend',icon:'📈',rows:trendRows.length?trendRows:[{Month:new Date().toISOString().slice(0,7),Opened:0,Closed:0}]},
+    {name:'Problems_by_Category',icon:'🏷',rows:catRows.length?catRows:[{Category:'No data',Total:0,Open:0,Closed:0}]},
+    {name:'Problems_by_Department',icon:'🏭',rows:deptRows.length?deptRows:[{Department:'No data',Total:0,Open:0,Closed:0,HighSeverity:0}]},
+    {name:'Time_to_Close',icon:'⏱',rows:closeRows.length?closeRows:[{ProblemID:'—',Title:'No closed problems yet',Department:'—',Category:'—',Severity:'—',CreatedDate:'—',ClosedDate:'—',DaysToClose:0}]},
+    {name:'Action_Completion_by_Owner',icon:'✅',rows:actionRows.length?actionRows:[{Owner:'No actions yet',Total:0,Complete:0,InProgress:0,Open:0,Overdue:0,CompletionRate:0}]},
+  ];
+}
+
+async function copyDataset(i){
+  const ds=(await buildPBIDatasets())[i];
+  const payload={tableName:ds.name,rows:ds.rows};
+  navigator.clipboard.writeText(JSON.stringify(payload,null,2)).then(()=>showNotif('Copied to clipboard.','success')).catch(()=>showNotif('Copy failed — use Download instead.','error'));
+}
+
+async function downloadDataset(i){
+  const ds=(await buildPBIDatasets())[i];
+  const payload={tableName:ds.name,rows:ds.rows};
+  triggerDownload(JSON.stringify(payload,null,2),'application/json',`3c_pbi_${ds.name}_${new Date().toISOString().split('T')[0]}.json`);
+  showNotif(`Downloaded ${ds.name}.json`,'success');
+}
+
+async function downloadAllPBIData(){
+  const datasets=await buildPBIDatasets();
+  const payload={
+    generatedAt:new Date().toISOString(),
+    generatedBy:currentUser.name,
+    totalProblems:(_cache.problems||[]).length,
+    totalActions:(_cache.actions||[]).length,
+    datasets:datasets.map(ds=>({tableName:ds.name,rows:ds.rows}))
+  };
+  triggerDownload(JSON.stringify(payload,null,2),'application/json',`3c_powerbi_export_${new Date().toISOString().split('T')[0]}.json`);
+  showNotif('All datasets downloaded.','success');
+}
+
+function buildPushAPISnippet(){
+  const cfg=getPBIConfig();
+  return`// Node.js — Power BI Push Dataset auto-push script
+// Run on a schedule (e.g. Azure Function Timer, cron job)
+// npm install node-fetch
+
+const fetch = require('node-fetch');
+
+const TENANT_ID    = '${cfg.tenantId||'YOUR_TENANT_ID'}';
+const CLIENT_ID    = '${cfg.clientId||'YOUR_CLIENT_ID'}';
+const CLIENT_SECRET = process.env.PBI_CLIENT_SECRET; // never hardcode
+const DATASET_ID   = '${cfg.datasetId||'YOUR_DATASET_ID'}'; // from Power BI Service
+const GROUP_ID     = '${cfg.workspaceId||'YOUR_WORKSPACE_ID'}';
+
+// Step 1: Get access token
+async function getAccessToken() {
+  const res = await fetch(
+    \`https://login.microsoftonline.com/\${TENANT_ID}/oauth2/v2.0/token\`,
+    { method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        scope: 'https://analysis.windows.net/powerbi/api/.default'
+      })
+    }
+  );
+  const data = await res.json();
+  return data.access_token;
+}
+
+// Step 2: Push rows to a table
+async function pushRows(token, tableName, rows) {
+  const url = \`https://api.powerbi.com/v1.0/myorg/groups/\${GROUP_ID}/datasets/\${DATASET_ID}/tables/\${tableName}/rows\`;
+  await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: \`Bearer \${token}\`,
+               'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows })
+  });
+}
+
+// Step 3: Export from 3C app localStorage and push
+// (In production, replace localStorage with your DB/API call)
+async function syncAll() {
+  const token = await getAccessToken();
+  const data = require('./3c_powerbi_export.json'); // downloaded from app
+  for (const ds of data.datasets) {
+    // Clear old rows first (optional)
+    await fetch(
+      \`https://api.powerbi.com/v1.0/myorg/groups/\${GROUP_ID}/datasets/\${DATASET_ID}/tables/\${ds.tableName}/rows\`,
+      { method: 'DELETE', headers: { Authorization: \`Bearer \${token}\` } }
+    );
+    await pushRows(token, ds.tableName, ds.rows);
+    console.log(\`✓ Pushed \${ds.rows.length} rows to \${ds.tableName}\`);
+  }
+}
+
+syncAll().catch(console.error);`;
+}
+
+function copyPushAPICode(){
+  navigator.clipboard.writeText(buildPushAPISnippet()).then(()=>showNotif('Code copied.','success')).catch(()=>showNotif('Copy failed.','error'));
+}
+
+// ── SETUP GUIDE ──
+function renderPBISetupGuide(){
+  return`
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">Azure & Power BI Setup — Step by step</div>
+        <span class="text-xs text-muted ml-auto">~30 mins · One-time setup</span>
+      </div>
+      <div class="card-body">
+        <div class="pbi-step">
+          <div class="pbi-step-num">1</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Create a Microsoft 365 / Azure account</div>
+            <div class="pbi-step-sub">Go to <a href="https://azure.microsoft.com/free" target="_blank">azure.microsoft.com/free</a> and sign up. You get a free tier with €200 credit. You'll need a Microsoft 365 subscription (Business Basic ~€5/user/month) to access Power BI Service.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">2</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Sign up for Power BI Pro</div>
+            <div class="pbi-step-sub">Go to <a href="https://app.powerbi.com" target="_blank">app.powerbi.com</a> and sign in with your Microsoft account. Start a free 60-day Power BI Pro trial. This is the "master account" used to publish reports and generate embed tokens.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">3</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Register an app in Azure Active Directory</div>
+            <div class="pbi-step-sub">
+              Go to <a href="https://portal.azure.com" target="_blank">portal.azure.com</a> → Azure Active Directory → App registrations → New registration.<br>
+              • Name: <strong>3C Problem Solver</strong><br>
+              • Supported account type: Single tenant<br>
+              • Redirect URI: leave blank for now<br>
+              After creation, note down your <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> — you'll paste these into the Embed Config tab.
+            </div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">4</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Add API permissions</div>
+            <div class="pbi-step-sub">
+              In your registered app → API permissions → Add a permission → Power BI Service.<br>
+              Add these delegated permissions: <strong>Report.Read.All</strong>, <strong>Dataset.Read.All</strong>, <strong>Dataset.ReadWrite.All</strong>, <strong>Workspace.Read.All</strong>.<br>
+              Then click <strong>Grant admin consent</strong>.
+            </div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">5</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Create a client secret</div>
+            <div class="pbi-step-sub">In your registered app → Certificates & secrets → New client secret. Set expiry to 24 months. <strong>Copy the secret value immediately</strong> — you won't see it again. Store it in Azure Key Vault or as an environment variable, never in code.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">6</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Build and publish your Power BI report</div>
+            <div class="pbi-step-sub">
+              Download Power BI Desktop (free). Import the JSON you exported from this app's <em>Data Export</em> tab. Build your 5 visuals. Publish to Power BI Service → your workspace.<br>
+              Note down the <strong>Workspace ID</strong> and <strong>Report ID</strong> from the URL: <em>app.powerbi.com/groups/<strong>[workspace-id]</strong>/reports/<strong>[report-id]</strong></em>
+            </div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">7</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Configure the Embed Config tab</div>
+            <div class="pbi-step-sub">Go to the <strong>Embed Config</strong> tab and paste in your Tenant ID, Client ID, Workspace ID, and Report ID. For the embed token, use a backend service or the Power BI Playground to generate a test token.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num done">✓</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Automate data push</div>
+            <div class="pbi-step-sub">Use the Node.js script from the Data Export tab to push fresh data from this app to Power BI on a schedule. Deploy it as an Azure Function Timer (free tier covers ~1M executions/month).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Cost estimate</div></div>
+      <div class="card-body">
+        <table class="data-table">
+          <thead><tr><th>Item</th><th>Cost</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Power BI Pro (master account)</td><td>~€13/month</td><td>1 licence required minimum</td></tr>
+            <tr><td>Microsoft 365 Business Basic</td><td>~€5/user/month</td><td>Required to access Power BI Service</td></tr>
+            <tr><td>Azure App Registration</td><td>Free</td><td>Azure AD app registration is free</td></tr>
+            <tr><td>Azure Functions (push script)</td><td>Free tier</td><td>1M executions/month free</td></tr>
+            <tr><td>Power BI Embedded capacity (A1)</td><td>~€735/month</td><td>Only needed if embedding for external users without PBI licences</td></tr>
+          </tbody>
+        </table>
+        <div class="text-xs text-muted mt-12">💡 For internal use (your own staff with Microsoft accounts), you only need Power BI Pro + M365. The expensive Embedded capacity is only for customer-facing deployments.</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── EMBED CONFIG ──
+function renderPBIEmbedConfig(cfg){
+  return`
+    <div class="card mb-16">
+      <div class="card-header"><div class="card-title">Power BI Embed Configuration</div></div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-16">Paste your Azure / Power BI credentials here. These are saved locally in your browser. In production, credentials should be handled server-side.</p>
+        <div class="form-row form-row-2 mb-12">
+          <div class="field"><label>Tenant ID <span class="text-xs text-muted">(Azure AD Directory ID)</span></label>
+            <input id="pbi-tenant" type="text" value="${esc(cfg.tenantId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+          <div class="field"><label>Client ID <span class="text-xs text-muted">(App Registration)</span></label>
+            <input id="pbi-client" type="text" value="${esc(cfg.clientId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+        </div>
+        <div class="form-row form-row-2 mb-12">
+          <div class="field"><label>Workspace ID <span class="text-xs text-muted">(Group ID)</span></label>
+            <input id="pbi-workspace" type="text" value="${esc(cfg.workspaceId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+          <div class="field"><label>Report ID</label>
+            <input id="pbi-report" type="text" value="${esc(cfg.reportId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+        </div>
+        <div class="form-row form-row-2 mb-12">
+          <div class="field"><label>Dataset ID <span class="text-xs text-muted">(for push API)</span></label>
+            <input id="pbi-dataset" type="text" value="${esc(cfg.datasetId||'')}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+          <div class="field"><label>Embed Token <span class="text-xs text-muted">(from backend / Playground)</span></label>
+            <input id="pbi-token" type="password" value="${esc(cfg.embedToken||'')}" placeholder="H4sI... (generate from your backend)"></div>
+        </div>
+        <div class="field mb-16">
+          <label>Embed URL <span class="text-xs text-muted">(from Power BI Service → File → Embed report)</span></label>
+          <input id="pbi-embedurl" type="text" value="${esc(cfg.embedUrl||'')}" placeholder="https://app.powerbi.com/reportEmbed?reportId=...">
+        </div>
+        <div class="flex gap-10 justify-end">
+          <button class="btn btn-ghost btn-sm" onclick="clearPBIConfig()">Clear</button>
+          <button class="btn btn-primary" onclick="savePBIConfigForm()">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">How to generate an Embed Token</div></div>
+      <div class="card-body">
+        <div class="pbi-step">
+          <div class="pbi-step-num">A</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Quick test — Power BI Playground</div>
+            <div class="pbi-step-sub">Go to <a href="https://playground.powerbi.com" target="_blank">playground.powerbi.com</a>, sign in, and generate a test embed token for your report. Paste it above.</div>
+          </div>
+        </div>
+        <div class="pbi-step">
+          <div class="pbi-step-num">B</div>
+          <div class="pbi-step-content">
+            <div class="pbi-step-title">Production — backend endpoint</div>
+            <div class="pbi-step-sub">Your backend calls the Power BI REST API: <code style="font-family:var(--mono);font-size:12px;background:var(--surface2);padding:2px 6px;border-radius:4px">POST /v1.0/myorg/groups/{groupId}/reports/{reportId}/GenerateToken</code><br>Returns an embed token valid for 60 minutes. Your frontend fetches this token before rendering.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function savePBIConfigForm(){
+  const cfg={
+    tenantId:document.getElementById('pbi-tenant').value.trim(),
+    clientId:document.getElementById('pbi-client').value.trim(),
+    workspaceId:document.getElementById('pbi-workspace').value.trim(),
+    reportId:document.getElementById('pbi-report').value.trim(),
+    datasetId:document.getElementById('pbi-dataset').value.trim(),
+    embedToken:document.getElementById('pbi-token').value.trim(),
+    embedUrl:document.getElementById('pbi-embedurl').value.trim(),
+  };
+  savePBIConfig(cfg);
+  showNotif('Power BI configuration saved.','success');
+  window._pbiTab = cfg.embedToken ? 'live' : 'embed';
+  renderPowerBI();
+}
+
+function clearPBIConfig(){
+  if(!confirm('Clear all Power BI configuration?')) return;
+  savePBIConfig({});
+  window._pbiTab='embed';
+  renderPowerBI();
+}
+
+// ── LIVE EMBED PANEL ──
+function renderPBILivePanel(cfg){
+  if(!cfg.embedUrl||!cfg.embedToken){
+    return`<div class="card"><div class="card-body text-muted text-sm">Embed URL and token are required. Complete the Embed Config tab first.</div></div>`;
+  }
+  return`
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">Live Power BI Report</div>
+        <span class="text-xs text-muted ml-auto">Tokens expire after 60 min — refresh to regenerate</span>
+        <button class="btn btn-ghost btn-sm" onclick="refreshPBIEmbed()">↻ Refresh</button>
+      </div>
+      <div class="card-body" style="padding:.75rem">
+        <div id="pbi-embed-container" style="width:100%;height:560px;border-radius:var(--r);overflow:hidden;background:var(--surface2);">
+          <iframe id="pbi-iframe" class="pbi-embed-frame"
+            src="${esc(cfg.embedUrl)}&autoAuth=true&ctid=${esc(cfg.tenantId||'')}"
+            allowfullscreen="true"
+            style="width:100%;height:100%;border:none;">
+          </iframe>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">powerbi-client SDK embed (full interactive)</div>
+        <button class="copy-btn ml-auto" onclick="copyEmbedSDKCode()">Copy code</button>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-12">For full interactivity (filters, drill-through, bookmarks), use the powerbi-client library. Add this to your production deployment:</p>
+        <div class="dataset-preview" id="sdk-embed-code">${buildSDKEmbedSnippet(cfg)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function refreshPBIEmbed(){
+  showNotif('To refresh the embed token, your backend must regenerate it via the Power BI REST API.','warning');
+}
+
+function buildSDKEmbedSnippet(cfg){
+  return`<!-- 1. Include powerbi-client from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"><\/script>
+
+<!-- 2. Container div -->
+<div id="pbi-report-container" style="height:560px;"></div>
+
+<script>
+  // Fetch a fresh embed token from YOUR backend first
+  const embedToken = await fetch('/api/pbi-token').then(r=>r.json());
+
+  const models = window['powerbi-client'].models;
+  const embedConfig = {
+    type: 'report',
+    id: '${cfg.reportId||'YOUR_REPORT_ID'}',
+    embedUrl: '${cfg.embedUrl||'https://app.powerbi.com/reportEmbed?reportId=...'}',
+    accessToken: embedToken,
+    tokenType: models.TokenType.Embed,
+    settings: {
+      navContentPaneEnabled: true,
+      filterPaneEnabled: true,
+      background: models.BackgroundType.Transparent,
+    }
+  };
+
+  const container = document.getElementById('pbi-report-container');
+  const report = powerbi.embed(container, embedConfig);
+
+  // React to events
+  report.on('loaded', () => console.log('Report loaded'));
+  report.on('error', e => console.error('Embed error:', e.detail));
+<\/script>`;
+}
+
+function copyEmbedSDKCode(){
+  const cfg=getPBIConfig();
+  navigator.clipboard.writeText(buildSDKEmbedSnippet(cfg)).then(()=>showNotif('SDK code copied.','success')).catch(()=>showNotif('Copy failed.','error'));
+}
+
+function triggerDownload(content, mimeType, filename){
+  const blob=new Blob([content],{type:mimeType});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},150);
+}
+
+function openCombo(inputId, ddId, options){
+  const input=document.getElementById(inputId);
+  const dd=document.getElementById(ddId);
+  if(!input||!dd) return;
+  renderComboOptions(inputId, ddId, options, input.value);
+  dd.classList.add('open');
+}
+
+function filterCombo(inputId, ddId, options){
+  const input=document.getElementById(inputId);
+  const dd=document.getElementById(ddId);
+  if(!input||!dd) return;
+  renderComboOptions(inputId, ddId, options, input.value);
+  dd.classList.add('open');
+}
+
+function renderComboOptions(inputId, ddId, options, query){
+  const dd=document.getElementById(ddId);
+  if(!dd) return;
+  const q=(query||'').toLowerCase().trim();
+  const filtered=options.filter(o=>!q||o.toLowerCase().includes(q));
+  const showAdd=q && !options.find(o=>o.toLowerCase()===q);
+  let html=filtered.map(o=>`<div class="combobox-opt" onmousedown="selectCombo('${inputId}','${ddId}','${esc(o)}')">${o}</div>`).join('');
+  if(showAdd) html+=`<div class="combobox-opt new-entry" onmousedown="selectCombo('${inputId}','${ddId}','${esc(query)}',true)">+ Add "${query}"</div>`;
+  dd.innerHTML=html||'<div class="combobox-opt" style="color:var(--text3)">No options</div>';
+}
+
+function selectCombo(inputId, ddId, value, isNew){
+  const input=document.getElementById(inputId);
+  if(input) input.value=value;
+  closeCombo(ddId);
+  // Persist new entries
+  if(isNew){
+    if(inputId==='c-dept') addCustomDept(value);
+    if(inputId==='c-process') addCustomProcess(value);
+  }
+}
+
+function closeCombo(ddId){
+  const dd=document.getElementById(ddId);
+  if(dd) dd.classList.remove('open');
+}
+
+function showNotif(msg,type=''){
+  const n=document.getElementById('notif');
+  n.textContent=msg; n.className='notif show'+(type?' '+type:'');
+  clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove('show'),3000);
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
