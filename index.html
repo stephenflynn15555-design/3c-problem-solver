@@ -775,7 +775,17 @@ async function getProblemWithDetails(id) {
     try {
       const photos = await dbGet('problem_photos', {problem_id:'eq.'+id, order:'created_at'});
       for (const ph of photos) {
-        const src = SB_URL+'/storage/v1/object/authenticated/problem-photos/'+ph.storage_path;
+        // Get a signed URL so photos actually load in the browser
+        const signRes = await fetch(SB_URL+'/storage/v1/object/sign/problem-photos/'+ph.storage_path, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+_token},
+          body: JSON.stringify({expiresIn: 3600})
+        });
+        let src = '';
+        if (signRes.ok) {
+          const signData = await signRes.json();
+          src = SB_URL+'/storage/v1'+signData.signedURL;
+        }
         if (ph.section==='concern') p.concernPhotos.push(src);
         else if (ph.section==='cause') p.causePhotos.push(src);
         else if (ph.section==='countermeasure') p.countermeasurePhotos.push(src);
@@ -1333,14 +1343,13 @@ function calcProblemCompletion(p){
   if(p.countermeasure&&p.countermeasure.description) score++;
   if(p.countermeasure&&p.countermeasure.owner) score++;
   if(p.countermeasure&&p.countermeasure.dueDate) score++;
-  if((p.concernPhotos||[]).length||(p.causePhotos||[]).length||(p.countermeasurePhotos||[]).length) score++;
+  // Use photoCount from DB if photos not loaded, else check arrays
+  const hasPhoto = (p.photoCount||0) > 0 ||
+    (p.concernPhotos||[]).length > 0 ||
+    (p.causePhotos||[]).length > 0 ||
+    (p.countermeasurePhotos||[]).length > 0;
+  if(hasPhoto) score++;
   return Math.round(score/max*100);
-}
-
-function openDetail(id){
-  currentDetailId=id;
-  window._activeDetailTab='tab-concern';
-  goTo('detail');
 }
 
 // ══════════════════════════════════════════════
@@ -1563,9 +1572,12 @@ function buildStepper(status){
 function renderDetailPhotos(gridId,photos,section,problemId,canEdit){
   const grid=document.getElementById(gridId);
   if(!grid) return;
+  // Cache photos for lightbox use
+  if(!window._detailPhotoCache) window._detailPhotoCache={};
+  window._detailPhotoCache[section] = photos;
   grid.innerHTML=photos.map((src,i)=>
-    `<div class="photo-thumb" onclick="openLightboxArr(${i},'${section}','${problemId}')">
-      <img src="${src}">
+    `<div class="photo-thumb" onclick="openLightboxDirect(${i},'${section}')">
+      <img src="${src}" onerror="this.style.opacity='0.3'">
       ${canEdit?`<button class="del-btn" onclick="event.stopPropagation();deleteDetailPhoto('${problemId}','${section}',${i})">✕</button>`:''}
     </div>`
   ).join('');
@@ -1630,18 +1642,35 @@ async function closeProblem(id){
 
 // LIGHTBOX
 let _lbPhotos=[]; let _lbIdx=0;
-async function openLightboxArr(idx,section,problemId){
-  const p=await getProblemWithDetails(problemId);
-  _lbPhotos=(p?p[section+'Photos']:[])|| [];
-  _lbIdx=idx;
-  document.getElementById('lb-img').src=_lbPhotos[idx]||'';
+
+function openLightboxDirect(idx, section){
+  // Use cached URLs from the currently rendered detail page
+  const photos = (window._detailPhotoCache && window._detailPhotoCache[section]) || [];
+  if(!photos[idx]) return;
+  _lbPhotos = photos; _lbIdx = idx;
+  const img = document.getElementById('lb-img');
+  img.src = photos[idx];
   document.getElementById('lightbox').classList.remove('hidden');
 }
+
+// Also keep the create-page lightbox working
 function openLightbox(idx,ctx){
   document.getElementById('lb-img').src=window._createPhotos[idx];
   document.getElementById('lightbox').classList.remove('hidden');
 }
-function closeLightbox(){ document.getElementById('lightbox').classList.add('hidden'); }
+
+function closeLightbox(){
+  document.getElementById('lightbox').classList.add('hidden');
+  document.getElementById('lb-img').src='';
+}
+
+// Reset photo cache when leaving detail page
+function openDetail(id){
+  currentDetailId=id;
+  window._activeDetailTab='tab-concern';
+  window._detailPhotoCache={};
+  goTo('detail');
+}
 
 // ══════════════════════════════════════════════
 // ACTIONS
