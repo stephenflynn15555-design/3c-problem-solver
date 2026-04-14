@@ -771,21 +771,11 @@ async function getProblemWithDetails(id) {
       return _c.problems.find(x=>x.id===id)||null;
     }
     const p = _mapP(rows[0]);
-    // photos
+    // photos — using public bucket URLs (no signing needed)
     try {
       const photos = await dbGet('problem_photos', {problem_id:'eq.'+id, order:'created_at'});
       for (const ph of photos) {
-        // Get a signed URL so photos actually load in the browser
-        const signRes = await fetch(SB_URL+'/storage/v1/object/sign/problem-photos/'+ph.storage_path, {
-          method:'POST',
-          headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+_token},
-          body: JSON.stringify({expiresIn: 3600})
-        });
-        let src = '';
-        if (signRes.ok) {
-          const signData = await signRes.json();
-          src = SB_URL+'/storage/v1'+signData.signedURL;
-        }
+        const src = SB_URL+'/storage/v1/object/public/problem-photos/'+ph.storage_path;
         if (ph.section==='concern') p.concernPhotos.push(src);
         else if (ph.section==='cause') p.causePhotos.push(src);
         else if (ph.section==='cause-staff') p.causeStaffPhotos.push(src);
