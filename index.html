@@ -5,10 +5,6 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#1a5fb4">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="/manifest.json">
 <title>3C Problem Solver</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style type="text/css">
@@ -426,28 +422,7 @@ a{color:var(--blue);text-decoration:none;}
 .pbi-tab:hover{color:var(--text);}
 .pbi-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
 .metric-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);color:var(--blue);padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;margin:3px;}
-/* OFFLINE BANNER */
-.offline-banner{
-  display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
-  background:#92400e;color:#fef3c7;text-align:center;
-  padding:8px 16px;font-size:13px;font-weight:500;
-}
-.offline-banner.show{display:block;}
-.sync-indicator{
-  display:inline-flex;align-items:center;gap:6px;font-size:12px;
-  color:var(--amber);margin-left:8px;
-}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-/* LOADING OVERLAY */
-.loading-overlay{
-  position:fixed;inset:0;background:rgba(255,255,255,.85);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  z-index:800;gap:16px;
-}
-.loading-overlay.hidden{display:none;}
-.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
+/* COMBOBOX */
 .combobox-wrap{position:relative;}
 .combobox-wrap input{width:100%;}
 .combobox-dropdown{
@@ -462,17 +437,6 @@ a{color:var(--blue);text-decoration:none;}
 </style>
 </head>
 <body>
-
-<!-- OFFLINE BANNER -->
-<div class="offline-banner" id="offline-banner">
-  ⚠ You are offline — changes will sync when connection is restored
-</div>
-
-<!-- LOADING OVERLAY -->
-<div class="loading-overlay hidden" id="loading-overlay">
-  <div class="spinner"></div>
-  <div style="font-size:14px;color:var(--text2)" id="loading-msg">Loading…</div>
-</div>
 
 <!-- ══════════ LOGIN ══════════ -->
 <div id="login-screen">
@@ -601,529 +565,284 @@ a{color:var(--blue);text-decoration:none;}
 </div>
 
 <script>
-// ══════════════════════════════════════════════
-// DATA LAYER
-// ══════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
-// SUPABASE CONFIGURATION — direct REST API, no SDK required
+// SUPABASE — direct REST API (no external SDK required)
 // ══════════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://tksfptaoplatbxtyaqqv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrc2ZwdGFvcGxhdGJ4dHlhcXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNTU3NDEsImV4cCI6MjA5MDczMTc0MX0.LfJq-iSbG8pFsVk7ti6AD9E00lLnL1uKkQRzioJTmdA';
+const SB_URL  = 'https://tksfptaoplatbxtyaqqv.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrc2ZwdGFvcGxhdGJ4dHlhcXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNTU3NDEsImV4cCI6MjA5MDczMTc0MX0.LfJq-iSbG8pFsVk7ti6AD9E00lLnL1uKkQRzioJTmdA';
 
-let _authToken = null;   // JWT access token after login
-let _authUser  = null;   // raw Supabase auth user object
-let sb = true;           // always true — we use fetch directly
+let _token = localStorage.getItem('3c_token') || null;
 
-function initSupabase() { return true; } // no-op, always ready
-
-// ── AUTH HELPERS ─────────────────────────────────────────────
-async function sbAuth(email, password) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ email, password })
+// Auth
+async function sbLogin(username, password) {
+  const res = await fetch(SB_URL+'/auth/v1/token?grant_type=password', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY},
+    body: JSON.stringify({email: username+'@3capp.local', password})
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error_description || data.msg || data.error || 'Login failed');
-  _authToken = data.access_token;
-  _authUser  = data.user;
-  // Persist session
-  localStorage.setItem('3c_token', _authToken);
-  localStorage.setItem('3c_user_id', data.user.id);
-  return data;
+  const d = await res.json();
+  if (!res.ok) throw new Error(d.error_description || d.msg || d.error || 'Login failed');
+  _token = d.access_token;
+  localStorage.setItem('3c_token', _token);
+  return d.user;
 }
 
-async function sbSignOut() {
-  if (_authToken) {
-    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-      method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` }
-    }).catch(()=>{});
-  }
-  _authToken = null; _authUser = null;
+async function sbLogout() {
+  if (_token) await fetch(SB_URL+'/auth/v1/logout', {
+    method:'POST', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_token}
+  }).catch(()=>{});
+  _token = null;
   localStorage.removeItem('3c_token');
-  localStorage.removeItem('3c_user_id');
-}
-
-async function sbUpdatePassword(newPassword) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` },
-    body: JSON.stringify({ password: newPassword })
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error_description || data.msg || 'Password update failed');
-  return data;
 }
 
 async function sbRestoreSession() {
-  const token = localStorage.getItem('3c_token');
-  if (!token) return null;
-  // Verify token is still valid
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` }
+  if (!_token) return null;
+  const res = await fetch(SB_URL+'/auth/v1/user', {
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_token}
   });
-  if (!r.ok) { localStorage.removeItem('3c_token'); return null; }
-  const user = await r.json();
-  _authToken = token;
-  _authUser = user;
-  return user;
+  if (!res.ok) { _token=null; localStorage.removeItem('3c_token'); return null; }
+  return res.json();
 }
 
-// ── DATABASE HELPERS ─────────────────────────────────────────
-function dbHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${_authToken || SUPABASE_ANON_KEY}`,
-    'Prefer': 'return=representation'
-  };
-}
-
-async function dbSelect(table, params) {
-  const q = params ? '?' + new URLSearchParams(params) : '';
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${q}`, {
-    headers: { ...dbHeaders(), 'Prefer': 'return=representation' }
+async function sbUpdatePassword(newPw) {
+  const res = await fetch(SB_URL+'/auth/v1/user', {
+    method:'PUT',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+_token},
+    body: JSON.stringify({password: newPw})
   });
-  if (!r.ok) { const e = await r.json(); throw new Error(e.message || r.statusText); }
-  return r.json();
+  if (!res.ok) { const d=await res.json(); throw new Error(d.error_description||d.msg||'Failed'); }
 }
 
-async function dbSelectOne(table, params) {
-  const rows = await dbSelect(table, params);
-  return Array.isArray(rows) ? rows[0] || null : rows;
+// DB helpers
+function _h() {
+  return {'Content-Type':'application/json','apikey':SB_KEY,
+    'Authorization':'Bearer '+(_token||SB_KEY),'Prefer':'return=representation'};
 }
 
-async function dbUpsert(table, row) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: { ...dbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
-    body: JSON.stringify(row)
+async function dbGet(table, params) {
+  const q = params ? '?'+new URLSearchParams(params) : '';
+  const res = await fetch(SB_URL+'/rest/v1/'+table+q, {headers:_h()});
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error((e&&e.message)||res.statusText); }
+  return res.json();
+}
+
+async function dbPost(table, body) {
+  const res = await fetch(SB_URL+'/rest/v1/'+table, {
+    method:'POST',
+    headers:{..._h(),'Prefer':'return=representation,resolution=merge-duplicates'},
+    body: JSON.stringify(body)
   });
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || e.details || r.statusText); }
-  const data = await r.json();
-  return Array.isArray(data) ? data[0] : data;
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error((e&&(e.message||e.details))||res.statusText); }
+  const d = await res.json().catch(()=>null);
+  return Array.isArray(d)?d[0]:d;
 }
 
-async function dbUpdate(table, row, matchCol, matchVal) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
-    method: 'PATCH',
-    headers: dbHeaders(),
-    body: JSON.stringify(row)
+async function dbPatch(table, matchKey, matchVal, body) {
+  const res = await fetch(SB_URL+'/rest/v1/'+table+'?'+matchKey+'=eq.'+encodeURIComponent(matchVal), {
+    method:'PATCH', headers:_h(), body:JSON.stringify(body)
   });
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || r.statusText); }
-  return r.status === 204 ? null : r.json().catch(()=>null);
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error((e&&e.message)||res.statusText); }
 }
 
-async function dbDelete(table, matchCol, matchVal) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
-    method: 'DELETE',
-    headers: dbHeaders()
+async function dbDel(table, matchKey, matchVal) {
+  const res = await fetch(SB_URL+'/rest/v1/'+table+'?'+matchKey+'=eq.'+encodeURIComponent(matchVal), {
+    method:'DELETE', headers:_h()
   });
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || r.statusText); }
+  if (!res.ok) { const e=await res.json().catch(()=>{}); throw new Error((e&&e.message)||res.statusText); }
 }
 
-async function dbInsert(table, row) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: dbHeaders(),
-    body: JSON.stringify(row)
-  });
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.message || e.details || r.statusText); }
-  const data = await r.json().catch(()=>null);
-  return Array.isArray(data) ? data[0] : data;
-}
-
-// Stub out the old sb.auth / sb.from style calls we may still reference
-const _sbStub = {
-  auth: {
-    signOut: sbSignOut,
-    updateUser: (u) => sbUpdatePassword(u.password),
-    admin: { createUser: ()=>{ throw new Error('Admin API requires service role key'); }, updateUserById: ()=>{ throw new Error('Admin API requires service role key'); }, deleteUser: ()=>{ throw new Error('Admin API requires service role key'); } }
-  }
+// ── OFFLINE CACHE ─────────────────────────────────────────────
+const _c = {
+  users:    JSON.parse(localStorage.getItem('3c_c_users')||'[]'),
+  problems: JSON.parse(localStorage.getItem('3c_c_probs')||'[]'),
+  actions:  JSON.parse(localStorage.getItem('3c_c_acts') ||'[]'),
+  depts:    JSON.parse(localStorage.getItem('3c_c_depts')||JSON.stringify(['Assembly','Machining','Painting','Quality','Welding','Packaging','Maintenance'])),
+  procs:    JSON.parse(localStorage.getItem('3c_c_procs')||JSON.stringify(['Line 1','Line 2','Line 3','Cell A','Cell B','Press Shop','Inspection'])),
 };
+function sc(k,v){ _c[k]=v; localStorage.setItem('3c_c_'+({users:'users',problems:'probs',actions:'acts',depts:'depts',procs:'procs'}[k]||k), JSON.stringify(v)); }
 
-// ── OFFLINE QUEUE ─────────────────────────────────────────────
-// Stores failed writes when offline; replayed on reconnect
-let offlineQueue = JSON.parse(localStorage.getItem('3c_offline_queue') || '[]');
-
-function saveOfflineQueue() {
-  localStorage.setItem('3c_offline_queue', JSON.stringify(offlineQueue));
-}
-
-function queueWrite(fn, args) {
-  offlineQueue.push({ fn, args, ts: Date.now() });
-  saveOfflineQueue();
-}
-
-async function flushOfflineQueue() {
-  if (!offlineQueue.length || !isOnline()) return;
-  const queue = [...offlineQueue];
-  offlineQueue = [];
-  saveOfflineQueue();
-  let failed = [];
-  for (const item of queue) {
-    try {
-      await window[item.fn](...item.args);
-    } catch(e) {
-      failed.push(item);
-    }
-  }
-  if (failed.length) { offlineQueue = failed; saveOfflineQueue(); }
-  else if (queue.length) { showNotif(`Synced ${queue.length} offline change${queue.length>1?'s':''}.`, 'success'); }
-}
-
-// ── IN-MEMORY CACHE (for offline reads) ──────────────────────
-let _cache = {
-  problems: JSON.parse(localStorage.getItem('3c_cache_problems') || '[]'),
-  actions:  JSON.parse(localStorage.getItem('3c_cache_actions')  || '[]'),
-  users:    JSON.parse(localStorage.getItem('3c_cache_users')    || '[]'),
-  depts:    JSON.parse(localStorage.getItem('3c_cache_depts')    || JSON.stringify(['Assembly','Machining','Painting','Quality','Welding','Packaging','Maintenance'])),
-  procs:    JSON.parse(localStorage.getItem('3c_cache_procs')    || JSON.stringify(['Line 1','Line 2','Line 3','Cell A','Cell B','Press Shop','Inspection'])),
-};
-
-function setCache(key, data) {
-  _cache[key] = data;
-  localStorage.setItem('3c_cache_' + key, JSON.stringify(data));
-}
-
-// ── ONLINE/OFFLINE DETECTION ──────────────────────────────────
-window.addEventListener('online',  () => { updateOnlineStatus(); flushOfflineQueue(); });
-window.addEventListener('offline', () => updateOnlineStatus());
-
-function isOnline() {
-  // isOnline() can return false incorrectly in some environments
-  // Default to true and let fetch errors handle actual offline state
-  return isOnline() !== false;
-}
-
-function updateOnlineStatus() {
-  const banner = document.getElementById('offline-banner');
-  if (banner) banner.classList.toggle('show', !isOnline());
-}
-
-// ── DATA LAYER — USERS ────────────────────────────────────────
+// ── DATA: USERS ───────────────────────────────────────────────
 async function getUsers() {
-  if (!isOnline()) return _cache.users;
   try {
-    const rows = await dbSelect('profiles', { order: 'full_name' });
-    const mapped = rows.map(u => ({
-      id: u.id, username: u.username, name: u.full_name,
-      role: u.role, dept: u.department, initials: u.initials,
-      mustChangePassword: u.must_change_password
-    }));
-    setCache('users', mapped);
-    return mapped;
-  } catch(e) { return _cache.users; }
+    const rows = await dbGet('profiles', {order:'full_name'});
+    const m = rows.map(u=>({id:u.id,username:u.username,name:u.full_name,role:u.role,dept:u.department,initials:u.initials,mustChangePassword:u.must_change_password}));
+    sc('users',m); return m;
+  } catch(e) { return _c.users; }
 }
+function saveUsers(u){ sc('users',u); } // kept for compat
 
-async function saveUserProfile(userId, updates) {
-  await dbUpdate('profiles', {
-    full_name: updates.name, username: updates.username,
-    role: updates.role, department: updates.dept,
-    initials: updates.initials,
-    must_change_password: updates.mustChangePassword ?? false,
-  }, 'id', userId);
-  await getUsers();
-}
-
-// ── DATA LAYER — PROBLEMS ─────────────────────────────────────
-async function getProblems() {
-  if (!isOnline()) return _cache.problems;
-  try {
-    const rows = await dbSelect('v_problems', { order: 'created_at.desc' });
-    const mapped = rows.map(mapDbProblem);
-    setCache('problems', mapped);
-    return mapped;
-  } catch(e) {
-    // Fall back to direct table
-    try {
-      const rows = await dbSelect('problems', { order: 'created_at.desc' });
-      const mapped = rows.map(mapDbProblem);
-      setCache('problems', mapped);
-      return mapped;
-    } catch(e2) { return _cache.problems; }
-  }
-}
-
-function mapDbProblem(p) {
+// ── DATA: PROBLEMS ────────────────────────────────────────────
+function _mapP(p) {
   return {
-    id: p.id,
-    problemId: p.problem_id,
-    title: p.title,
-    description: p.description,
-    dept: p.department,
-    process: p.process,
-    category: p.category,
-    severity: p.severity,
-    status: p.status,
-    impact: p.impact,
-    frequency: p.frequency,
-    firstSeen: p.first_seen_date,
-    cause: {
-      description: p.cause_description,
-      type: p.cause_type,
-      tools: p.cause_tools,
-      evidence: p.cause_evidence,
-    },
-    countermeasure: {
-      description: p.cm_description,
-      type: p.cm_type,
-      owner: p.cm_owner_id,
-      ownerName: p.cm_owner_name,
-      dueDate: p.cm_due_date,
-      status: p.cm_status,
-    },
-    reportedById: p.reported_by_id,
-    reportedByName: p.reported_by_name,
-    closedDate: p.closed_date ? new Date(p.closed_date).getTime() : null,
-    created: new Date(p.created_at).getTime(),
-    updated: new Date(p.updated_at).getTime(),
-    photoCount: p.photo_count || 0,
-    actionCount: p.action_count || 0,
-    actionsComplete: p.actions_complete || 0,
-    ageDays: p.age_days || 0,
-    // Photos are loaded separately
-    concernPhotos: [], causePhotos: [], countermeasurePhotos: [],
-    audit: [],
+    id:p.id, problemId:p.problem_id||p.problemId,
+    title:p.title, description:p.description,
+    dept:p.department||p.dept, process:p.process,
+    category:p.category, severity:p.severity, status:p.status||'new',
+    impact:p.impact, frequency:p.frequency, firstSeen:p.first_seen_date||p.firstSeen,
+    cause:{description:p.cause_description,type:p.cause_type,tools:p.cause_tools,evidence:p.cause_evidence},
+    countermeasure:{description:p.cm_description,type:p.cm_type,owner:p.cm_owner_id,dueDate:p.cm_due_date,status:p.cm_status},
+    reportedById:p.reported_by_id||p.reportedById,
+    reportedByName:p.reported_by_name||p.reportedByName||'',
+    closedDate:p.closed_date?new Date(p.closed_date).getTime():null,
+    created:p.created_at?new Date(p.created_at).getTime():(p.created||Date.now()),
+    updated:p.updated_at?new Date(p.updated_at).getTime():(p.updated||Date.now()),
+    concernPhotos:[], causePhotos:[], countermeasurePhotos:[], audit:[],
+    photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
 }
+
+async function getProblems() {
+  try {
+    const rows = await dbGet('problems', {order:'created_at.desc'});
+    const m = rows.map(_mapP); sc('problems',m); return m;
+  } catch(e) { return _c.problems; }
+}
+function saveProblems(ps){ sc('problems',ps); } // cache sync only
 
 async function saveProblem(p) {
-  if (!isOnline()) { queueWrite('saveProblem', [p]); return p; }
   const row = {
-    id: p.id,
-    title: p.title,
-    description: p.description || null,
-    department: p.dept || null,
-    process: p.process || null,
-    category: p.category || null,
-    severity: p.severity || null,
-    status: p.status || 'new',
-    impact: p.impact || null,
-    frequency: p.frequency || null,
-    first_seen_date: p.firstSeen || null,
-    cause_description: p.cause?.description || null,
-    cause_type: p.cause?.type || null,
-    cause_tools: p.cause?.tools || null,
-    cause_evidence: p.cause?.evidence || null,
-    cm_description: p.countermeasure?.description || null,
-    cm_type: p.countermeasure?.type || null,
-    cm_owner_id: p.countermeasure?.owner || null,
-    cm_due_date: p.countermeasure?.dueDate || null,
-    cm_status: p.countermeasure?.status || null,
-    reported_by_id: p.reportedById || currentUser?.id || null,
-    closed_date: p.closedDate ? new Date(p.closedDate).toISOString() : null,
+    id:p.id, title:p.title, description:p.description||null,
+    department:p.dept||null, process:p.process||null,
+    category:p.category||null, severity:p.severity||null, status:p.status||'new',
+    impact:p.impact||null, frequency:p.frequency||null, first_seen_date:p.firstSeen||null,
+    cause_description:p.cause?.description||null, cause_type:p.cause?.type||null,
+    cause_tools:p.cause?.tools||null, cause_evidence:p.cause?.evidence||null,
+    cm_description:p.countermeasure?.description||null, cm_type:p.countermeasure?.type||null,
+    cm_owner_id:p.countermeasure?.owner||null, cm_due_date:p.countermeasure?.dueDate||null,
+    cm_status:p.countermeasure?.status||null,
+    reported_by_id:p.reportedById||currentUser?.id||null,
+    closed_date:p.closedDate?new Date(p.closedDate).toISOString():null,
   };
-  try {
-    const saved = await dbUpsert('problems', row);
-    if (saved) { p.problemId = saved.problem_id || p.problemId; p.id = saved.id; p._saved = true; }
-    return p;
-  } catch(e) {
-    console.error('saveProblem error:', e);
-    queueWrite('saveProblem', [p]);
-    throw e;
-  }
+  const saved = await dbPost('problems', row);
+  if (saved) { p.problemId=saved.problem_id||p.problemId; p.id=saved.id; }
+  return p;
 }
 
-async function getProblemWithDetails(id) {
-  if (!id) return null;
-  if (!isOnline()) return _cache.problems.find(x => x.id === id) || null;
-  try {
-    // Try view first, fall back to direct table
-    let pData;
-    try {
-      const rows = await dbSelect('v_problems', { id: `eq.${id}` });
-      pData = rows[0];
-    } catch(e) {
-      const rows = await dbSelect('problems', { id: `eq.${id}` });
-      pData = rows[0];
-    }
-    if (!pData) return null;
-    const problem = mapDbProblem(pData);
-
-    // Photos
-    try {
-      const photos = await dbSelect('problem_photos', { problem_id: `eq.${id}`, order: 'created_at' });
-      for (const photo of photos) {
-        const src = `${SUPABASE_URL}/storage/v1/object/authenticated/problem-photos/${photo.storage_path}`;
-        if (photo.section === 'concern') problem.concernPhotos.push(src);
-        else if (photo.section === 'cause') problem.causePhotos.push(src);
-        else if (photo.section === 'countermeasure') problem.countermeasurePhotos.push(src);
-      }
-    } catch(e) { /* photos optional */ }
-
-    // Audit
-    try {
-      const audit = await dbSelect('audit_log', { problem_id: `eq.${id}`, order: 'created_at.desc' });
-      problem.audit = audit.map(a => ({
-        action: a.action, by: a.performed_by_name,
-        ts: new Date(a.created_at).getTime(),
-      }));
-    } catch(e) { /* audit optional */ }
-
-    return problem;
-  } catch(e) {
-    console.error('getProblemWithDetails error:', e);
-    return _cache.problems.find(x => x.id === id) || null;
-  }
-}
-}
-
-// ── DATA LAYER — ACTIONS ──────────────────────────────────────
+// ── DATA: ACTIONS ─────────────────────────────────────────────
 async function getActions(problemId) {
-  if (!isOnline()) {
-    const cached = _cache.actions;
-    return problemId ? cached.filter(a => a.problemId === problemId) : cached;
-  }
   try {
-    const params = problemId
-      ? { problem_id: `eq.${problemId}`, order: 'created_at' }
-      : { order: 'created_at' };
-    const rows = await dbSelect('v_actions', params);
-    const mapped = rows.map(a => ({
-      id: a.id, problemId: a.problem_id, title: a.title,
-      owner: a.owner_id, ownerName: a.owner_name,
-      dueDate: a.due_date, status: a.status, comments: a.comments,
-      completedDate: a.completed_at ? new Date(a.completed_at).getTime() : null,
-      created: new Date(a.created_at).getTime(),
+    const params = problemId ? {problem_id:'eq.'+problemId,order:'created_at'} : {order:'created_at'};
+    const rows = await dbGet('actions', params);
+    const m = rows.map(a=>({
+      id:a.id, problemId:a.problem_id, title:a.title,
+      owner:a.owner_id, ownerName:_c.users.find(u=>u.id===a.owner_id)?.name||'',
+      dueDate:a.due_date, status:a.status, comments:a.comments,
+      completedDate:a.completed_at?new Date(a.completed_at).getTime():null,
+      created:new Date(a.created_at).getTime(),
     }));
-    if (!problemId) setCache('actions', mapped);
-    return mapped;
-  } catch(e) {
-    // fallback to direct table
-    try {
-      const params = problemId
-        ? { problem_id: `eq.${problemId}`, order: 'created_at' }
-        : { order: 'created_at' };
-      const rows = await dbSelect('actions', params);
-      const mapped = rows.map(a => ({
-        id: a.id, problemId: a.problem_id, title: a.title,
-        owner: a.owner_id, ownerName: _cache.users.find(u=>u.id===a.owner_id)?.name || '',
-        dueDate: a.due_date, status: a.status, comments: a.comments,
-        completedDate: a.completed_at ? new Date(a.completed_at).getTime() : null,
-        created: new Date(a.created_at).getTime(),
-      }));
-      if (!problemId) setCache('actions', mapped);
-      return mapped;
-    } catch(e2) {
-      return _cache.actions.filter(a => !problemId || a.problemId === problemId);
-    }
-  }
+    if (!problemId) sc('actions',m);
+    return m;
+  } catch(e) { return _c.actions.filter(a=>!problemId||a.problemId===problemId); }
 }
+function saveActions(a){ sc('actions',a); }
 
 async function saveAction(a) {
-  if (!isOnline()) { queueWrite('saveAction', [a]); return; }
-  const row = {
-    id: a.id, problem_id: a.problemId, title: a.title,
-    owner_id: a.owner || null, due_date: a.dueDate || null,
-    status: a.status, comments: a.comments || null,
-    completed_at: a.completedDate ? new Date(a.completedDate).toISOString() : null,
-    created_by: currentUser?.id || null,
-  };
-  try { await dbUpsert('actions', row); }
-  catch(e) { queueWrite('saveAction', [a]); throw e; }
+  await dbPost('actions', {
+    id:a.id, problem_id:a.problemId, title:a.title,
+    owner_id:a.owner||null, due_date:a.dueDate||null, status:a.status,
+    comments:a.comments||null,
+    completed_at:a.completedDate?new Date(a.completedDate).toISOString():null,
+    created_by:currentUser?.id||null,
+  });
 }
 
-async function deleteAction(id) {
-  await dbDelete('actions', 'id', id);
-}
+// deleteActionById defined below in ACTIONS section
 
-// ── DATA LAYER — AUDIT ────────────────────────────────────────
+// ── DATA: AUDIT ───────────────────────────────────────────────
+function addAudit(){ /* legacy no-op */ }
+function addAuditTo(){ /* legacy no-op */ }
 async function addAuditEntry(problemId, action) {
-  if (!problemId) return;
-  try {
-    await dbInsert('audit_log', {
-      problem_id: problemId, action,
-      performed_by: currentUser?.id || null,
-      performed_by_name: currentUser?.name || 'Unknown',
-    });
-  } catch(e) { console.warn('Audit log error:', e.message); }
+  if (!problemId||!_token) return;
+  await dbPost('audit_log', {
+    problem_id:problemId, action,
+    performed_by:currentUser?.id||null,
+    performed_by_name:currentUser?.name||'Unknown'
+  }).catch(()=>{});
 }
 
-// ── DATA LAYER — PHOTOS ───────────────────────────────────────
+// ── DATA: PROBLEM DETAIL (photos + audit) ────────────────────
+async function getProblemWithDetails(id) {
+  if (!id) return null;
+  try {
+    const rows = await dbGet('problems', {id:'eq.'+id});
+    if (!rows[0]) return _c.problems.find(x=>x.id===id)||null;
+    const p = _mapP(rows[0]);
+    // photos
+    try {
+      const photos = await dbGet('problem_photos', {problem_id:'eq.'+id, order:'created_at'});
+      for (const ph of photos) {
+        const src = SB_URL+'/storage/v1/object/authenticated/problem-photos/'+ph.storage_path;
+        if (ph.section==='concern') p.concernPhotos.push(src);
+        else if (ph.section==='cause') p.causePhotos.push(src);
+        else if (ph.section==='countermeasure') p.countermeasurePhotos.push(src);
+      }
+    } catch(e){}
+    // audit
+    try {
+      const audit = await dbGet('audit_log', {problem_id:'eq.'+id, order:'created_at.desc'});
+      p.audit = audit.map(a=>({action:a.action,by:a.performed_by_name,ts:new Date(a.created_at).getTime()}));
+    } catch(e){}
+    return p;
+  } catch(e) { return _c.problems.find(x=>x.id===id)||null; }
+}
+
+// ── DATA: PHOTOS ──────────────────────────────────────────────
 async function uploadPhoto(problemId, section, dataUrl) {
-  if (!_authToken) return null;
-  const ext = dataUrl.split(';')[0].split('/')[1] || 'jpg';
-  const path = `${problemId}/${section}/${Date.now()}.${ext}`;
+  if (!_token) return null;
+  const ext = dataUrl.split(';')[0].split('/')[1]||'jpg';
+  const path = problemId+'/'+section+'/'+Date.now()+'.'+ext;
   const blob = await (await fetch(dataUrl)).blob();
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/problem-photos/${path}`, {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}`, 'Content-Type': blob.type },
-    body: blob
+  const res = await fetch(SB_URL+'/storage/v1/object/problem-photos/'+path, {
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_token,'Content-Type':blob.type},
+    body:blob
   });
-  if (!r.ok) { console.error('Photo upload error:', await r.text()); return null; }
-  await dbInsert('problem_photos', {
-    problem_id: problemId, section, storage_path: path,
-    uploaded_by: currentUser?.id || null,
-  });
+  if (!res.ok) return null;
+  await dbPost('problem_photos', {problem_id:problemId,section,storage_path:path,uploaded_by:currentUser?.id||null}).catch(()=>{});
   return path;
 }
 
-async function deletePhoto(path, photoRowId) {
-  if (!_authToken) return;
-  await fetch(`${SUPABASE_URL}/storage/v1/object/problem-photos/${path}`, {
-    method: 'DELETE',
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${_authToken}` }
-  }).catch(()=>{});
-  if (photoRowId) await dbDelete('problem_photos', 'id', photoRowId).catch(()=>{});
+async function deleteDetailPhoto(problemId, section, idx) {
+  try {
+    const photos = await dbGet('problem_photos', {problem_id:'eq.'+problemId, section:'eq.'+section, order:'created_at'});
+    if (photos[idx]) {
+      await fetch(SB_URL+'/storage/v1/object/problem-photos/'+photos[idx].storage_path, {
+        method:'DELETE', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_token}
+      }).catch(()=>{});
+      await dbDel('problem_photos','id',photos[idx].id).catch(()=>{});
+      await addAuditEntry(problemId,'Photo removed from '+section);
+    }
+  } catch(e){}
+  window._activeDetailTab='tab-'+(section==='countermeasure'?'counter':section);
+  renderDetail();
 }
 
-// ── DATA LAYER — DEPTS/PROCESSES ─────────────────────────────
+async function addDetailPhoto(section, src) {
+  if (!currentDetailId) return;
+  await uploadPhoto(currentDetailId, section, src);
+  await addAuditEntry(currentDetailId, 'Photo added to '+section);
+  window._activeDetailTab='tab-'+(section==='countermeasure'?'counter':section);
+  renderDetail();
+}
+
+// ── DATA: DEPTS / PROCESSES ───────────────────────────────────
 async function getStoredDepts() {
-  if (!isOnline()) return _cache.depts;
-  try {
-    const rows = await dbSelect('departments', { order: 'name' });
-    const names = rows.map(d => d.name);
-    setCache('depts', names); return names;
-  } catch(e) { return _cache.depts; }
+  try { const r=await dbGet('departments',{order:'name'}); const n=r.map(d=>d.name); sc('depts',n); return n; }
+  catch(e){ return _c.depts; }
 }
-
 async function getStoredProcesses() {
-  if (!isOnline()) return _cache.procs;
-  try {
-    const rows = await dbSelect('processes', { order: 'name' });
-    const names = rows.map(d => d.name);
-    setCache('procs', names); return names;
-  } catch(e) { return _cache.procs; }
+  try { const r=await dbGet('processes',{order:'name'}); const n=r.map(d=>d.name); sc('procs',n); return n; }
+  catch(e){ return _c.procs; }
 }
+async function addCustomDept(v) { if(!v)return; try{await dbPost('departments',{name:v});}catch(e){} sc('depts',[..._c.depts.filter(x=>x!==v),v]); }
+async function addCustomProcess(v) { if(!v)return; try{await dbPost('processes',{name:v});}catch(e){} sc('procs',[..._c.procs.filter(x=>x!==v),v]); }
 
-async function addCustomDept(val) {
-  if (!val) return;
-  const depts = await getStoredDepts();
-  if (depts.includes(val)) return;
-  try { await dbInsert('departments', { name: val }); } catch(e) {}
-  setCache('depts', [...depts, val]);
-}
+// ── LEGACY COMPAT ─────────────────────────────────────────────
+function uid(){ return crypto.randomUUID?crypto.randomUUID():'p'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+function aid(){ return crypto.randomUUID?crypto.randomUUID():'a'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+async function nextProblemId(){ const ps=await getProblems(); return 'RPT-'+String(ps.length+1).padStart(4,'0'); }
 
-async function addCustomProcess(val) {
-  if (!val) return;
-  const procs = await getStoredProcesses();
-  if (procs.includes(val)) return;
-  try { await dbInsert('processes', { name: val }); } catch(e) {}
-  setCache('procs', [...procs, val]);
-}
-
-// ── REALTIME SUBSCRIPTIONS ────────────────────────────────────
-function subscribeToRealtime() {
-  // Realtime via SDK not available without the SDK
-  // Poll for updates every 30s as fallback when on the dashboard
-  if (window._realtimeInterval) clearInterval(window._realtimeInterval);
-  window._realtimeInterval = setInterval(() => {
-    if (document.getElementById('page-dashboard')?.classList.contains('active')) renderDashboard();
-    else if (document.getElementById('page-problems')?.classList.contains('active')) renderProblems();
-    updateBadges();
-  }, 30000);
-}
-
-// ── LEGACY HELPERS (for offline-only fallback) ────────────────
-function uid(){ return crypto.randomUUID ? crypto.randomUUID() : 'p'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
-function aid(){ return crypto.randomUUID ? crypto.randomUUID() : 'a'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
-
-async function nextProblemId(){
-  const ps = await getProblems();
-  return 'RPT-' + String(ps.length + 1).padStart(4, '0');
-}
+// ── STATUS CONSTANTS ──────────────────────────────────────────
 const STATUS_LABELS = {
   'new':'New','cause-defined':'Cause Defined',
   'countermeasure-defined':'Countermeasure Defined','closed':'Closed'
@@ -1138,112 +857,53 @@ let currentPhotoTarget = null;
 let editingProblemId = null;
 let currentDetailId = null;
 
-function showLoading(msg='Loading…') {
-  const el = document.getElementById('loading-overlay');
-  const msg_el = document.getElementById('loading-msg');
-  if (el) el.classList.remove('hidden');
-  if (msg_el) msg_el.textContent = msg;
-}
-function hideLoading() {
-  const el = document.getElementById('loading-overlay');
-  if (el) el.classList.add('hidden');
-}
-
 // ══════════════════════════════════════════════
-// AUTH — SUPABASE
+// AUTH
 // ══════════════════════════════════════════════
 document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('l-email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('l-pass').focus();});
+
+// Restore session on load
+window.addEventListener('load', async () => {
+  try {
+    const user = await sbRestoreSession();
+    if (!user) return;
+    const rows = await dbGet('profiles', {id:'eq.'+user.id});
+    if (!rows[0]) return;
+    const p = rows[0];
+    currentUser = {id:p.id,username:p.username,name:p.full_name,role:p.role,dept:p.department,initials:p.initials,mustChangePassword:p.must_change_password};
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    initApp();
+  } catch(e) { /* stay on login */ }
+});
 
 async function doLogin(){
   const username = document.getElementById('l-email').value.trim().toLowerCase();
   const pass = document.getElementById('l-pass').value;
   const err = document.getElementById('login-err');
-  err.style.display = 'none';
-
-  if (!username || !pass) {
-    err.textContent = 'Please enter your username and password.';
-    err.style.display = 'block';
-    return;
-  }
-
-  showLoading('Signing in…');
+  err.style.display='none';
+  if(!username||!pass){ err.textContent='Enter username and password.'; err.style.display='block'; return; }
+  const btn = document.querySelector('#login-screen .btn-primary');
+  if(btn){ btn.textContent='Signing in…'; btn.disabled=true; }
   try {
-    const email = `${username}@3capp.local`;
-    await sbAuth(email, pass);
-
-    // Load profile
-    const rows = await dbSelect('profiles', { id: `eq.${_authUser.id}` });
-    const fullProfile = rows[0];
-
-    if (!fullProfile) {
-      hideLoading();
-      err.textContent = 'Account found but profile is missing — contact your administrator.';
-      err.style.display = 'block';
-      await sbSignOut();
-      return;
-    }
-
-    currentUser = {
-      id: fullProfile.id, username: fullProfile.username,
-      name: fullProfile.full_name, role: fullProfile.role,
-      dept: fullProfile.department, initials: fullProfile.initials,
-      mustChangePassword: fullProfile.must_change_password,
-    };
-
-    hideLoading();
+    const authUser = await sbLogin(username, pass);
+    const rows = await dbGet('profiles', {id:'eq.'+authUser.id});
+    const p = rows[0];
+    if(!p){ err.textContent='Profile missing — contact your administrator.'; err.style.display='block'; await sbLogout(); return; }
+    currentUser = {id:p.id,username:p.username,name:p.full_name,role:p.role,dept:p.department,initials:p.initials,mustChangePassword:p.must_change_password};
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
-
-    if (currentUser.mustChangePassword) { initApp(); showChangePasswordModal(); }
+    if(currentUser.mustChangePassword){ initApp(); showChangePasswordModal(); }
     else initApp();
-    subscribeToRealtime();
   } catch(e) {
-    hideLoading();
-    err.textContent = e.message || 'Login failed.';
-    err.style.display = 'block';
+    err.textContent = e.message==='Login failed' ? 'Invalid username or password.' : e.message;
+    err.style.display='block';
+  } finally {
+    if(btn){ btn.textContent='Sign in →'; btn.disabled=false; }
   }
 }
 
-async function doLogout(){
-  await sbSignOut();
-  if (window._realtimeInterval) clearInterval(window._realtimeInterval);
-  currentUser = null;
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('app').classList.add('hidden');
-  document.getElementById('l-email').value = '';
-  document.getElementById('l-pass').value = '';
-}
-
-function showSetupPrompt() {
-  // Scroll down to show the config section in the login card
-  const hint = document.querySelector('.login-demo');
-  if (hint) {
-    hint.innerHTML = `
-      <strong style="color:var(--red)">Supabase not configured</strong><br>
-      Enter your Supabase credentials below to connect:
-      <div style="margin-top:8px">
-        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">SUPABASE URL</label>
-        <input id="sb-url-input" type="text" placeholder="https://xxx.supabase.co" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
-        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">ANON KEY</label>
-        <input id="sb-key-input" type="text" placeholder="eyJhbGci..." style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
-        <button onclick="saveSupabaseConfig()" style="width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">Connect & Sign in</button>
-      </div>
-    `;
-  }
-}
-
-function saveSupabaseConfig() {
-  const url = document.getElementById('sb-url-input')?.value.trim();
-  const key = document.getElementById('sb-key-input')?.value.trim();
-  if (!url || !key) { showNotif('Both URL and key required.', 'error'); return; }
-  localStorage.setItem('3c_sb_url', url);
-  localStorage.setItem('3c_sb_key', key);
-  showNotif('Saved — reloading…', 'success');
-  setTimeout(() => location.reload(), 800);
-}
-
-// ── PASSWORD CHANGE ───────────────────────────────────────────
 function showChangePasswordModal(){
   document.getElementById('modal-title').textContent='Set Your Password';
   document.getElementById('modal-body').innerHTML=`
@@ -1253,83 +913,35 @@ function showChangePasswordModal(){
     <div class="field mb-12"><label>New Password</label><input type="password" id="np-pass" placeholder="Min. 6 characters"></div>
     <div class="field"><label>Confirm Password</label><input type="password" id="np-confirm" placeholder="Repeat password"></div>
   `;
-  document.getElementById('modal-footer').innerHTML=`
-    <button class="btn btn-primary" onclick="saveNewPassword()">Set Password</button>
-  `;
+  document.getElementById('modal-footer').innerHTML=`<button class="btn btn-primary" onclick="saveNewPassword()">Set Password</button>`;
   document.getElementById('modal-bg').classList.remove('hidden');
 }
 
 async function saveNewPassword(){
-  const p1 = document.getElementById('np-pass').value;
-  const p2 = document.getElementById('np-confirm').value;
+  const p1=document.getElementById('np-pass').value;
+  const p2=document.getElementById('np-confirm').value;
   if(p1.length<6){showNotif('Password must be at least 6 characters.','error');return;}
   if(p1!==p2){showNotif('Passwords do not match.','error');return;}
   try {
     await sbUpdatePassword(p1);
-    await dbUpdate('profiles', { must_change_password: false }, 'id', currentUser.id);
-    currentUser.mustChangePassword = false;
-    closeModal();
-    showNotif('Password updated successfully.','success');
+    await dbPatch('profiles',{must_change_password:false},'id',currentUser.id).catch(()=>{});
+    currentUser.mustChangePassword=false;
+    closeModal(); showNotif('Password updated.','success');
   } catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
-async function saveMyPassword(){
-  const newP = document.getElementById('cp-new').value;
-  const conf = document.getElementById('cp-confirm').value;
-  if(newP.length<6){showNotif('New password must be at least 6 characters.','error');return;}
-  if(newP!==conf){showNotif('Passwords do not match.','error');return;}
-  try {
-    await sbUpdatePassword(newP);
-    closeModal();
-    showNotif('Password updated.','success');
-  } catch(e){ showNotif('Error: '+e.message,'error'); }
+async function doLogout(){
+  await sbLogout();
+  currentUser=null;
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('l-email').value='';
+  document.getElementById('l-pass').value='';
 }
 
 // ══════════════════════════════════════════════
 // APP INIT
 // ══════════════════════════════════════════════
-// Register service worker for offline support
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-  navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.type === 'ONLINE_RESTORED') { flushOfflineQueue(); updateBadges(); }
-  });
-}
-
-// Init Supabase on page load
-document.addEventListener('DOMContentLoaded', () => {
-  initSupabase();
-  updateOnlineStatus();
-
-  // Try to restore session from stored token
-  setTimeout(async () => {
-    try {
-      const user = await sbRestoreSession();
-      if (!user) return; // no session — stay on login
-
-      showLoading('Restoring session…');
-      const rows = await dbSelect('profiles', { id: `eq.${user.id}` });
-      const profile = rows[0];
-
-      if (!profile) { hideLoading(); return; }
-
-      currentUser = {
-        id: profile.id, username: profile.username,
-        name: profile.full_name, role: profile.role,
-        dept: profile.department, initials: profile.initials,
-        mustChangePassword: profile.must_change_password,
-      };
-      hideLoading();
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('app').classList.remove('hidden');
-      initApp();
-      subscribeToRealtime();
-    } catch(e) {
-      hideLoading();
-    }
-  }, 50);
-});
-
 function initApp(){
   document.getElementById('sb-name').textContent = currentUser.name;
   document.getElementById('sb-role').textContent = currentUser.role.charAt(0).toUpperCase()+currentUser.role.slice(1);
@@ -1373,8 +985,7 @@ async function updateBadges(){
   const open = ps.filter(p=>p.status!=='closed').length;
   document.getElementById('open-badge').textContent=open;
   const actions = await getActions();
-  const today = new Date(); today.setHours(0,0,0,0);
-  const overdue = actions.filter(a=>a.status!=='complete' && a.dueDate && new Date(a.dueDate)<today).length;
+  const overdue = actions.filter(a=>a.status!=='complete' && a.dueDate && new Date(a.dueDate)<new Date()).length;
   const ab = document.getElementById('action-badge');
   if(overdue>0){ab.style.display='';ab.textContent=overdue;}else{ab.style.display='none';}
 }
@@ -1464,7 +1075,10 @@ function catClass(c){return{Quality:'cat-quality',Safety:'cat-safety',Downtime:'
 
 function filterToHigh(){ window._filterSev='High'; goTo('problems'); }
 
-// All users see all problems — handled by getProblems()
+function visibleProblems(ps){
+  if(!ps) ps=[];
+  return ps; // all users see all problems
+}
 
 // ══════════════════════════════════════════════
 // CREATE CONCERN
@@ -1472,12 +1086,7 @@ function filterToHigh(){ window._filterSev='High'; goTo('problems'); }
 async function renderCreate(){
   const isEdit = !!editingProblemId;
   let ep = {};
-  if(isEdit){ ep=(_cache.problems||[]).find(p=>p.id===editingProblemId)||{}; }
-  // Pre-load depts and processes so comboboxes have data
-  const depts = await getStoredDepts();
-  const procs = await getStoredProcesses();
-  // Store in cache for sync combobox access
-  _cache.depts = depts; _cache.procs = procs;
+  if(isEdit){ ep=(await getProblems()).find(p=>p.id===editingProblemId)||{}; }
 
   document.getElementById('page-create').innerHTML=`
     <div class="card">
@@ -1496,12 +1105,12 @@ async function renderCreate(){
           <div class="form-row form-row-2">
             <div class="field"><label>Department / Area *</label>
               <div class="combobox-wrap">
-                <input id="c-dept" type="text" placeholder="Select or type…" value="${esc(ep.dept||'')}" autocomplete="off" oninput="filterCombo('c-dept','c-dept-dd',_cache.depts||[])" onfocus="openCombo('c-dept','c-dept-dd',_cache.depts||[])" onblur="setTimeout(()=>closeCombo('c-dept-dd'),200)">
+                <input id="c-dept" type="text" placeholder="Select or type…" value="${esc(ep.dept||'')}" autocomplete="off" oninput="filterCombo('c-dept','c-dept-dd',_c.depts||[])" onfocus="openCombo('c-dept','c-dept-dd',_c.depts||[])" onblur="setTimeout(()=>closeCombo('c-dept-dd'),200)">
                 <div id="c-dept-dd" class="combobox-dropdown"></div>
               </div></div>
             <div class="field"><label>Line / Process</label>
               <div class="combobox-wrap">
-                <input id="c-process" type="text" placeholder="Select or type…" value="${esc(ep.process||'')}" autocomplete="off" oninput="filterCombo('c-process','c-process-dd',_cache.procs||[])" onfocus="openCombo('c-process','c-process-dd',_cache.procs||[])" onblur="setTimeout(()=>closeCombo('c-process-dd'),200)">
+                <input id="c-process" type="text" placeholder="Select or type…" value="${esc(ep.process||'')}" autocomplete="off" oninput="filterCombo('c-process','c-process-dd',_c.procs||[])" onfocus="openCombo('c-process','c-process-dd',_c.procs||[])" onblur="setTimeout(()=>closeCombo('c-process-dd'),200)">
                 <div id="c-process-dd" class="combobox-dropdown"></div>
               </div></div>
           </div>
@@ -1583,60 +1192,40 @@ async function submitConcern(){
   if(!title){showNotif('Problem title is required.','error');return;}
   const dept=document.getElementById('c-dept').value.trim();
   const process=document.getElementById('c-process').value.trim();
-  // Persist custom dept/process values
   if(dept) await addCustomDept(dept);
   if(process) await addCustomProcess(process);
-  const ps = await getProblems();
   if(editingProblemId){
-    const existing = ps.find(p=>p.id===editingProblemId);
+    const existing = (await getProblems()).find(p=>p.id===editingProblemId);
     if(existing){
-      existing.title=title;
-      existing.description=document.getElementById('c-desc').value;
-      existing.dept=dept;
-      existing.process=process;
+      existing.title=title; existing.description=document.getElementById('c-desc').value;
+      existing.dept=dept; existing.process=process;
       existing.category=document.getElementById('c-cat').value;
       existing.severity=document.getElementById('c-sev').value;
-      existing.concernPhotos=window._createPhotos;
-      existing.updated=Date.now();
-      try {
-        await saveProblem(existing);
-        await addAuditEntry(existing.id,'Concern updated');
-      } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+      try { await saveProblem(existing); await addAuditEntry(existing.id,'Concern updated'); }
+      catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
     }
     showNotif('Concern updated.','success');
-    editingProblemId=null;
-    currentDetailId=existing?.id||currentDetailId;
+    editingProblemId=null; currentDetailId=existing?.id||currentDetailId;
     goTo('detail');
   } else {
     const sev=document.getElementById('c-sev').value;
     const p={
-      id:uid(), problemId: await nextProblemId(),
+      id:uid(), problemId:await nextProblemId(),
       title, description:document.getElementById('c-desc').value,
-      dept, process,
-      category:document.getElementById('c-cat').value,
-      severity:sev,
-      concernPhotos:window._createPhotos,
-      reportedById:currentUser.id,
-      reportedByName:currentUser.name,
-      status:'new',
+      dept, process, category:document.getElementById('c-cat').value, severity:sev,
+      concernPhotos:window._createPhotos, reportedById:currentUser.id,
+      reportedByName:currentUser.name, status:'new',
       created:Date.now(), updated:Date.now(),
-      cause:{}, countermeasure:{},
-      causePhotos:[], countermeasurePhotos:[], audit:[],
+      cause:{}, countermeasure:{}, causePhotos:[], countermeasurePhotos:[], audit:[],
     };
     try {
       const saved = await saveProblem(p);
       currentDetailId = saved.id || p.id;
-      await addAuditEntry(currentDetailId, 'Concern created by '+currentUser.name);
-      for(const photoSrc of window._createPhotos){
-        await uploadPhoto(currentDetailId, 'concern', photoSrc);
-      }
-    } catch(e){
-      showNotif('Save failed: '+e.message,'error');
-      console.error('submitConcern error:', e);
-      return;
-    }
+      await addAuditEntry(currentDetailId,'Concern created by '+currentUser.name);
+      for(const src of window._createPhotos) await uploadPhoto(currentDetailId,'concern',src);
+    } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
     if(sev==='High') showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
-    else showNotif('Concern logged: '+p.problemId,'success');
+    else showNotif('Concern logged.','success');
     window._createPhotos=[];
     updateBadges();
     goTo('detail');
@@ -1644,7 +1233,6 @@ async function submitConcern(){
 }
 
 function cancelCreate(){ editingProblemId=null; goTo('problems'); }
-
 
 // ══════════════════════════════════════════════
 // PROBLEM LIST
@@ -1747,47 +1335,9 @@ function openDetail(id){
 // PROBLEM DETAIL (3C)
 // ══════════════════════════════════════════════
 async function renderDetail(){
-  if(!currentDetailId){
-    document.getElementById('page-detail').innerHTML='<div style="padding:2rem;color:var(--text2)">No problem selected. <a href="#" onclick="goTo(\'problems\')">Go to Problem List →</a></div>';
-    return;
-  }
-  showLoading('Loading problem…');
-  let p, diagError = null;
-  try {
-    p = await getProblemWithDetails(currentDetailId);
-  } catch(e) {
-    diagError = e.message;
-    p = null;
-  }
-  hideLoading();
-  if(!p){
-    let diagHtml = '';
-    try {
-      const rows = await dbSelect('problems', { id: `eq.${currentDetailId}` });
-      const raw = rows[0];
-      diagHtml = `
-        <div style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:var(--r);font-size:12px;font-family:var(--mono)">
-          <div style="font-weight:600;margin-bottom:.5rem">Diagnostics:</div>
-          <div>currentDetailId: ${currentDetailId}</div>
-          <div>Direct table query: ${raw ? '✓ found — '+raw.title : '✗ not found'}</div>
-          <div>Exception: ${diagError||'none'}</div>
-        </div>`;
-    } catch(diagErr) {
-      diagHtml = `<div style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:var(--r);font-size:12px;font-family:var(--mono)">
-        <div>ID: ${currentDetailId}</div><div>Error: ${diagErr.message}</div></div>`;
-    }
-    document.getElementById('page-detail').innerHTML=`
-      <div style="padding:2rem">
-        <div style="color:var(--red);font-weight:500;margin-bottom:.5rem">Could not load problem</div>
-        <div style="color:var(--text2);font-size:13px;margin-bottom:1rem">Check diagnostics below and share with support.</div>
-        <div style="display:flex;gap:8px;margin-bottom:1rem">
-          <button class="btn btn-ghost btn-sm" onclick="goTo('problems')">← Problem List</button>
-          <button class="btn btn-ghost btn-sm" onclick="renderDetail()">↺ Retry</button>
-        </div>
-        ${diagHtml}
-      </div>`;
-    return;
-  }
+  if(!currentDetailId){ document.getElementById('page-detail').innerHTML='<div class="text-muted">No problem selected.</div>'; return; }
+  const p = await getProblemWithDetails(currentDetailId);
+  if(!p){ document.getElementById('page-detail').innerHTML='<div style="padding:2rem"><div style="color:var(--red);font-weight:500">Could not load problem.</div><button class="btn btn-ghost btn-sm mt-8" onclick="goTo(\'problems\')">← Back</button> <button class="btn btn-ghost btn-sm mt-8" onclick="renderDetail()">↺ Retry</button></div>'; return; }
 
   const canEdit = p.status !== 'closed';
   const canAdvance = p.status !== 'closed';
@@ -1900,7 +1450,7 @@ async function renderDetail(){
               </select></div>
             <div class="field"><label>Owner</label>
               <select id="d-cmowner" ${!canEdit?'disabled':''}>
-                ${_cache.users.map(u=>`<option value="${u.id}" ${(p.countermeasure||{}).owner===u.id?'selected':''}>${u.name}</option>`).join('')}
+                ${(_c.users||[]).map(u=>`<option value="${u.id}" ${(p.countermeasure||{}).owner===u.id?'selected':''}>${u.name}</option>`).join('')}
               </select></div>
             <div class="field"><label>Due Date</label>
               <input id="d-cmdue" type="date" value="${esc((p.countermeasure||{}).dueDate||'')}" ${!canEdit?'disabled':''}></div>
@@ -1992,74 +1542,32 @@ function renderDetailPhotos(gridId,photos,section,problemId,canEdit){
   ).join('');
 }
 
-async function deleteDetailPhoto(problemId,section,idx){
-  try {
-    const photos = await dbSelect('problem_photos', {
-      problem_id: `eq.${problemId}`, section: `eq.${section}`, order: 'created_at'
-    });
-    if(photos && photos[idx]){
-      await deletePhoto(photos[idx].storage_path, photos[idx].id);
-      await addAuditEntry(problemId, `Photo removed from ${section}`);
-    }
-  } catch(e){ console.warn('deleteDetailPhoto error:', e.message); }
-  window._activeDetailTab = `tab-${section==='countermeasure'?'counter':section}`;
-  renderDetail();
-}
-
-async function addDetailPhoto(section, src){
-  if(!currentDetailId) return;
-  await uploadPhoto(currentDetailId, section, src);
-  await addAuditEntry(currentDetailId, `Photo added to ${section}`);
-  window._activeDetailTab = `tab-${section==='countermeasure'?'counter':section}`;
-  renderDetail();
-}
-
 async function saveConcernSection(id){
-  const p = await getProblemWithDetails(id); if(!p) return;
-  p.description = document.getElementById('d-concern').value;
-  p.impact      = document.getElementById('d-impact').value;
-  p.frequency   = document.getElementById('d-freq').value;
-  p.firstSeen   = document.getElementById('d-firstseen').value;
-  try {
-    await saveProblem(p);
-    await addAuditEntry(id, 'Concern section updated');
-    showNotif('Concern saved.','success'); updateBadges();
-  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  const p=await getProblemWithDetails(id); if(!p) return;
+  p.description=document.getElementById('d-concern').value;
+  p.impact=document.getElementById('d-impact').value;
+  p.frequency=document.getElementById('d-freq').value;
+  p.firstSeen=document.getElementById('d-firstseen').value;
+  try { await saveProblem(p); await addAuditEntry(p.id,'Concern section updated'); showNotif('Concern saved.','success'); updateBadges(); }
+  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   window._activeDetailTab='tab-concern';
   renderDetail();
 }
 
 async function saveCauseSection(id){
-  const p = await getProblemWithDetails(id); if(!p) return;
-  p.cause = {
-    description: document.getElementById('d-cause').value,
-    type:        document.getElementById('d-causetype').value,
-    tools:       document.getElementById('d-causetool').value,
-    evidence:    document.getElementById('d-causeevidence').value,
-  };
-  try {
-    await saveProblem(p);
-    await addAuditEntry(id, 'Cause section updated');
-    showNotif('Cause saved.','success');
-  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  const p=await getProblemWithDetails(id); if(!p) return;
+  p.cause={description:document.getElementById('d-cause').value,type:document.getElementById('d-causetype').value,tools:document.getElementById('d-causetool').value,evidence:document.getElementById('d-causeevidence').value};
+  try { await saveProblem(p); await addAuditEntry(p.id,'Cause section updated'); showNotif('Cause saved.','success'); }
+  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   window._activeDetailTab='tab-cause';
   renderDetail();
 }
 
 async function saveCMSection(id){
-  const p = await getProblemWithDetails(id); if(!p) return;
-  p.countermeasure = {
-    description: document.getElementById('d-cm').value,
-    type:        document.getElementById('d-cmtype').value,
-    owner:       document.getElementById('d-cmowner').value,
-    dueDate:     document.getElementById('d-cmdue').value,
-    status:      document.getElementById('d-cmstatus').value,
-  };
-  try {
-    await saveProblem(p);
-    await addAuditEntry(id, 'Countermeasure section updated');
-    showNotif('Countermeasure saved.','success');
-  } catch(e){ showNotif('Save error: '+e.message,'error'); return; }
+  const p=await getProblemWithDetails(id); if(!p) return;
+  p.countermeasure={description:document.getElementById('d-cm').value,type:document.getElementById('d-cmtype').value,owner:document.getElementById('d-cmowner').value,dueDate:document.getElementById('d-cmdue').value,status:document.getElementById('d-cmstatus').value};
+  try { await saveProblem(p); await addAuditEntry(p.id,'Countermeasure section updated'); showNotif('Countermeasure saved.','success'); }
+  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   window._activeDetailTab='tab-counter';
   renderDetail();
 }
@@ -2067,40 +1575,37 @@ async function saveCMSection(id){
 function editProblem(id){ editingProblemId=id; window._activeDetailTab='tab-concern'; goTo('create'); }
 
 async function reopenProblem(id){
-  const p = await getProblemWithDetails(id); if(!p) return;
+  const p=await getProblemWithDetails(id); if(!p) return;
   p.status='countermeasure-defined'; p.closedDate=null;
-  await saveProblem(p);
-  await addAuditEntry(id,'Problem reopened by '+currentUser.name);
-  showNotif('Problem reopened.','warning'); updateBadges(); renderDetail();
+  try { await saveProblem(p); await addAuditEntry(id,'Problem reopened by '+currentUser.name); showNotif('Problem reopened.','warning'); updateBadges(); renderDetail(); }
+  catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 async function advanceStatus(id,newStatus){
-  const p = await getProblemWithDetails(id); if(!p) return;
+  const p=await getProblemWithDetails(id); if(!p) return;
   p.status=newStatus;
-  await saveProblem(p);
-  await addAuditEntry(id,'Status → '+STATUS_LABELS[newStatus]);
-  showNotif('Status updated.','success'); updateBadges(); renderDetail();
+  try { await saveProblem(p); await addAuditEntry(id,'Status → '+STATUS_LABELS[newStatus]); showNotif('Status updated.','success'); updateBadges(); renderDetail(); }
+  catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 async function closeProblem(id){
-  const p = await getProblemWithDetails(id); if(!p) return;
+  const p=await getProblemWithDetails(id); if(!p) return;
   if(!(p.cause&&p.cause.description)){showNotif('Root cause must be defined before closing.','error');return;}
   if(!(p.countermeasure&&p.countermeasure.description)){showNotif('Countermeasure must be defined before closing.','error');return;}
-  const hasEvidence = p.causePhotos.length || p.countermeasurePhotos.length;
+  const hasEvidence=p.causePhotos.length||p.countermeasurePhotos.length;
   if(!hasEvidence){showNotif('Evidence photo required before closing.','error');return;}
   p.status='closed'; p.closedDate=Date.now();
-  await saveProblem(p);
-  await addAuditEntry(id,'Problem closed by '+currentUser.name);
-  showNotif('Problem closed. ✓','success'); updateBadges(); renderDetail();
+  try { await saveProblem(p); await addAuditEntry(id,'Problem closed by '+currentUser.name); showNotif('Problem closed. ✓','success'); updateBadges(); renderDetail(); }
+  catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 // LIGHTBOX
 let _lbPhotos=[]; let _lbIdx=0;
 async function openLightboxArr(idx,section,problemId){
-  const p = await getProblemWithDetails(problemId);
-  _lbPhotos = (p ? p[section+'Photos'] : []) || [];
+  const p=await getProblemWithDetails(problemId);
+  _lbPhotos=(p?p[section+'Photos']:[])|| [];
   _lbIdx=idx;
-  document.getElementById('lb-img').src=_lbPhotos[idx];
+  document.getElementById('lb-img').src=_lbPhotos[idx]||'';
   document.getElementById('lightbox').classList.remove('hidden');
 }
 function openLightbox(idx,ctx){
@@ -2124,7 +1629,7 @@ function renderActionsList(actions,problemId){
         <span class="pill ${a.status==='complete'?'pill-complete':overdue?'pill-overdue':a.status==='in-progress'?'pill-progress':'pill-open'}">${a.status==='in-progress'?'In Progress':a.status.charAt(0).toUpperCase()+a.status.slice(1)}</span>
       </div>
       <div class="action-meta">
-        <span>👤 ${a.ownerName || _cache.users.find(u=>u.id===a.owner)?.name || a.owner}</span>
+        <span>👤 ${(_c.users||[]).find(u=>u.id===a.owner)?.name||a.owner}</span>
         <span>📅 ${a.dueDate||'No date'}</span>
         ${overdue?'<span class="text-red font-600">⚠ Overdue</span>':''}
       </div>
@@ -2176,7 +1681,7 @@ function openAddActionModal(problemId){
     <div class="field mb-12"><label>Action Title *</label><input id="a-title" type="text" placeholder="Specific action required"></div>
     <div class="form-row form-row-2">
       <div class="field"><label>Owner *</label>
-        <select id="a-owner">${_cache.users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}</select></div>
+        <select id="a-owner">${(_c.users||[]).map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}</select></div>
       <div class="field"><label>Due Date *</label><input id="a-due" type="date"></div>
     </div>
     <div class="field mt-12"><label>Comments</label><textarea id="a-comment" placeholder="Additional notes…"></textarea></div>
@@ -2195,25 +1700,22 @@ async function saveNewAction(problemId){
   if(!title){showNotif('Action title required.','error');return;}
   if(!owner){showNotif('Owner required.','error');return;}
   if(!due){showNotif('Due date required.','error');return;}
-  const newAction = {id:aid(),problemId,title,owner,dueDate:due,status:'open',comments:document.getElementById('a-comment').value,created:Date.now()};
-  try {
-    await saveAction(newAction);
-    await addAuditEntry(problemId, 'Action added: '+title);
-  } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+  const newAction={id:aid(),problemId,title,owner,dueDate:due,status:'open',comments:document.getElementById('a-comment').value,created:Date.now()};
+  try { await saveAction(newAction); await addAuditEntry(problemId,'Action added: '+title); }
+  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   closeModal(); showNotif('Action added.','success'); updateBadges();
   window._activeDetailTab='tab-actions';
   renderDetail();
 }
 
 async function editActionModal(actionId,problemId){
-  const actions = await getActions(problemId);
-  const a = actions.find(x=>x.id===actionId); if(!a) return;
+  const actions=await getActions(problemId); const a=actions.find(x=>x.id===actionId); if(!a) return;
   document.getElementById('modal-title').textContent='Edit Action';
   document.getElementById('modal-body').innerHTML=`
     <div class="field mb-12"><label>Action Title</label><input id="a-title" type="text" value="${esc(a.title)}"></div>
     <div class="form-row form-row-2">
       <div class="field"><label>Owner</label>
-        <select id="a-owner">${_cache.users.map(u=>`<option value="${u.id}" ${a.owner===u.id?'selected':''}>${u.name}</option>`).join('')}</select></div>
+        <select id="a-owner">${(_c.users||[]).map(u=>`<option value="${u.id}" ${a.owner===u.id?'selected':''}>${u.name}</option>`).join('')}</select></div>
       <div class="field"><label>Due Date</label><input id="a-due" type="date" value="${a.dueDate||''}"></div>
     </div>
     <div class="field mt-12"><label>Status</label>
@@ -2231,13 +1733,12 @@ async function editActionModal(actionId,problemId){
 }
 
 async function updateAction(actionId,problemId){
-  const actions = await getActions(problemId);
-  const a = actions.find(x=>x.id===actionId); if(!a) return;
-  a.title   = document.getElementById('a-title').value;
-  a.owner   = document.getElementById('a-owner').value;
-  a.dueDate = document.getElementById('a-due').value;
-  a.status  = document.getElementById('a-status').value;
-  a.comments= document.getElementById('a-comment').value;
+  const actions=await getActions(problemId); const a=actions.find(x=>x.id===actionId); if(!a) return;
+  a.title=document.getElementById('a-title').value;
+  a.owner=document.getElementById('a-owner').value;
+  a.dueDate=document.getElementById('a-due').value;
+  a.status=document.getElementById('a-status').value;
+  a.comments=document.getElementById('a-comment').value;
   try { await saveAction(a); } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   closeModal(); showNotif('Action updated.','success'); updateBadges();
   if(currentDetailId) renderDetail(); else renderActions();
@@ -2245,19 +1746,16 @@ async function updateAction(actionId,problemId){
 
 async function deleteActionById(actionId,problemId){
   if(!confirm('Delete this action?')) return;
-  try { await deleteAction(actionId); } catch(e){ showNotif('Delete failed: '+e.message,'error'); return; }
+  try { await dbDel('actions','id',actionId); } catch(e){ showNotif('Delete failed: '+e.message,'error'); return; }
   closeModal(); showNotif('Action deleted.'); updateBadges();
   if(currentDetailId) renderDetail(); else renderActions();
 }
 
 async function completeAction(actionId,problemId){
-  const actions = await getActions(problemId);
-  const a = actions.find(x=>x.id===actionId); if(!a) return;
+  const actions=await getActions(problemId); const a=actions.find(x=>x.id===actionId); if(!a) return;
   a.status='complete'; a.completedDate=Date.now();
-  try {
-    await saveAction(a);
-    await addAuditEntry(problemId, 'Action completed: '+a.title);
-  } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
+  try { await saveAction(a); await addAuditEntry(problemId,'Action completed: '+a.title); }
+  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
   showNotif('Action marked complete. ✓','success'); updateBadges();
   if(currentDetailId) renderDetail(); else renderActions();
 }
@@ -2425,8 +1923,7 @@ function saveSettings(){
   showNotif('Settings saved.','success');
 }
 
-async function openAddUserModal(){
-  const depts = await getStoredDepts();
+function openAddUserModal(){
   document.getElementById('modal-title').textContent='Add New User';
   document.getElementById('modal-body').innerHTML=`
     <div class="form-row form-row-2 mb-12">
@@ -2439,9 +1936,11 @@ async function openAddUserModal(){
           ${['operator','engineer','manager','admin'].map(r=>`<option value="${r}">${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('')}
         </select></div>
       <div class="field"><label>Department</label>
-        <select id="u-dept">${depts.map(d=>`<option>${d}</option>`).join('')}</select></div>
+        <select id="u-dept">
+          ${getStoredDepts().map(d=>`<option>${d}</option>`).join('')}
+        </select></div>
     </div>
-    <div class="field"><label>Temporary Password *</label><input id="u-pass" type="text" placeholder="Min. 6 characters"></div>
+    <div class="field"><label>Temporary Password *</label><input id="u-pass" type="text" placeholder="User will be prompted to change on first login"></div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px;">User will be required to change this password on first login.</div>
   `;
   document.getElementById('modal-footer').innerHTML=`
@@ -2452,23 +1951,22 @@ async function openAddUserModal(){
 }
 
 async function addUser(){
-  const name     = document.getElementById('u-name').value.trim();
-  const username = document.getElementById('u-uname').value.trim().toLowerCase();
-  const role     = document.getElementById('u-role').value;
-  const dept     = document.getElementById('u-dept').value;
-  const pass     = document.getElementById('u-pass').value;
+  const name=document.getElementById('u-name').value.trim();
+  const username=document.getElementById('u-uname').value.trim().toLowerCase();
+  const role=document.getElementById('u-role').value;
+  const dept=document.getElementById('u-dept').value;
+  const pass=document.getElementById('u-pass').value;
   if(!name||!username||!pass){showNotif('Name, username and password are required.','error');return;}
   if(pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
-  const users = await getUsers();
+  const users=await getUsers();
   if(users.find(u=>u.username===username)){showNotif('Username already exists.','error');return;}
   closeModal();
-  showNotif(`To add ${username}: Supabase → Auth → Users → Add user. Email: ${username}@3capp.local, Password: ${pass}. Then run fix-auth.sql.`,'warning');
+  showNotif(`To add ${username}: Supabase → Auth → Users → Add user\nEmail: ${username}@3capp.local\nPassword: ${pass}\nThen run: INSERT INTO profiles... (see SETUP.md)`,'warning');
 }
 
 async function openEditUserModal(uid){
-  const users = await getUsers();
-  const u = users.find(x=>x.id===uid); if(!u) return;
-  const depts = await getStoredDepts();
+  const users=await getUsers(); const u=users.find(x=>x.id===uid); if(!u) return;
+  const depts=await getStoredDepts();
   document.getElementById('modal-title').textContent='Edit User';
   document.getElementById('modal-body').innerHTML=`
     <div class="form-row form-row-2 mb-12">
@@ -2492,67 +1990,48 @@ async function openEditUserModal(uid){
 }
 
 async function saveEditUser(uid){
-  const name     = document.getElementById('eu-name').value.trim();
-  const username = document.getElementById('eu-uname').value.trim().toLowerCase();
+  const name=document.getElementById('eu-name').value.trim();
+  const username=document.getElementById('eu-uname').value.trim().toLowerCase();
   if(!name||!username){showNotif('Name and username required.','error');return;}
-  const users = await getUsers();
-  const conflict = users.find(u=>u.username===username&&u.id!==uid);
+  const users=await getUsers();
+  const conflict=users.find(u=>u.username===username&&u.id!==uid);
   if(conflict){showNotif('Username already taken.','error');return;}
-  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const initials=name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
   try {
-    await saveUserProfile(uid, {
-      name, username,
-      role: document.getElementById('eu-role').value,
-      dept: document.getElementById('eu-dept').value,
-      initials,
-    });
-    if(currentUser.id===uid){
-      currentUser = {...currentUser, name, username, initials,
-        role: document.getElementById('eu-role').value,
-        dept: document.getElementById('eu-dept').value};
-      document.getElementById('sb-name').textContent = currentUser.name;
-      document.getElementById('sb-avatar').textContent = currentUser.initials;
-    }
-    closeModal();
-    showNotif('User updated.','success');
-    renderAdmin();
+    await dbPatch('profiles',{full_name:name,username,role:document.getElementById('eu-role').value,department:document.getElementById('eu-dept').value,initials},'id',uid);
+    if(currentUser.id===uid){currentUser={...currentUser,name,username,initials,role:document.getElementById('eu-role').value,dept:document.getElementById('eu-dept').value};document.getElementById('sb-name').textContent=name;document.getElementById('sb-avatar').textContent=initials;}
+    await getUsers();
+    closeModal(); showNotif('User updated.','success'); renderAdmin();
   } catch(e){ showNotif('Update failed: '+e.message,'error'); }
 }
 
 async function openResetPwModal(uid){
-  const users = await getUsers();
-  const u = users.find(x=>x.id===uid); if(!u) return;
+  const users=await getUsers(); const u=users.find(x=>x.id===uid); if(!u) return;
   document.getElementById('modal-title').textContent=`Reset Password — ${u.name}`;
   document.getElementById('modal-body').innerHTML=`
     <div class="field"><label>Temporary Password</label>
       <input id="rp-pass" type="text" placeholder="Enter temporary password (min. 6 chars)"></div>
-    <div style="font-size:12px;color:var(--text3);margin-top:8px;">User will be required to change this on next login.</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px;">Run SQL in Supabase to apply the new password.</div>
   `;
   document.getElementById('modal-footer').innerHTML=`
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="resetUserPassword('${uid}')">Set Password</button>
+    <button class="btn btn-primary" onclick="resetUserPassword('${uid}')">Show SQL</button>
   `;
   document.getElementById('modal-bg').classList.remove('hidden');
 }
 
 async function resetUserPassword(uid){
-  const pass = document.getElementById('rp-pass').value;
+  const pass=document.getElementById('rp-pass').value;
   if(!pass||pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
-  try {
-    await dbUpdate('profiles', {must_change_password:true}, 'id', uid);
-    await getUsers();
-    closeModal();
-    showNotif(`Run in Supabase SQL Editor: UPDATE auth.users SET encrypted_password = crypt('${pass}', gen_salt('bf')) WHERE id = '${uid}';`,'warning');
-    renderAdmin();
-  } catch(e){ showNotif('Error: '+e.message,'error'); }
+  closeModal();
+  showNotif(`Run in Supabase SQL Editor:\nUPDATE auth.users SET encrypted_password = crypt('${pass}', gen_salt('bf')) WHERE id = '${uid}';`,'warning');
 }
 
 async function deleteUser(uid){
   if(!confirm('Delete this user? Their reports will remain.')) return;
   try {
-    await dbDelete('profiles', 'id', uid);
-    await getUsers();
-    showNotif('Profile deleted. Remove auth user in Supabase Dashboard → Authentication → Users.','warning');
+    await dbDel('profiles','id',uid); await getUsers();
+    showNotif('Profile deleted. Remove auth user in Supabase → Auth → Users.','warning');
     renderAdmin();
   } catch(e){ showNotif('Delete failed: '+e.message,'error'); }
 }
@@ -2599,8 +2078,7 @@ async function renderProfile(){
 // EXPORT
 // ══════════════════════════════════════════════
 async function exportCSV(){
-  showLoading('Preparing CSV…');
-  const ps = await getProblems();
+  const ps=await getProblems();
   const headers=['ID','Title','Department','Process','Category','Severity','Status','Reporter','Created','Closed','Days Open','Root Cause','Countermeasure','CM Status'];
   const rows=ps.map(p=>{
     const daysOpen=p.status==='closed'&&p.closedDate
@@ -2634,14 +2112,12 @@ async function exportCSV(){
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
-  hideLoading();
   showNotif('CSV exported — check your downloads.','success');
 }
 
 async function exportPDF(){
-  showLoading('Building PDF…');
-  const ps = await getProblems();
-  const actions = await getActions();
+  const ps=await getProblems();
+  const actions=await getActions();
   const dateStr=new Date().toLocaleDateString('en-IE',{day:'2-digit',month:'short',year:'numeric'});
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>3C Report — ${dateStr}</title>
@@ -2722,7 +2198,7 @@ async function exportPDF(){
           <div class="c-label c3-label">C3 — Countermeasure</div>
           <div class="c-field"><div class="c-key">Description</div><div class="c-val">${(p.countermeasure||{}).description||'—'}</div></div>
           <div class="c-field"><div class="c-key">Type</div><div class="c-val">${(p.countermeasure||{}).type||'—'}</div></div>
-          <div class="c-field"><div class="c-key">Owner</div><div class="c-val">${(_cache.users||[]).find(u=>u.id===(p.countermeasure||{}).owner)?.name||'—'}</div></div>
+          <div class="c-field"><div class="c-key">Owner</div><div class="c-val">${(_c.users||[]).find(u=>u.id===(p.countermeasure||{}).owner)?.name||'—'}</div></div>
           <div class="c-field"><div class="c-key">Due</div><div class="c-val">${(p.countermeasure||{}).dueDate||'—'}</div></div>
           <div class="c-field"><div class="c-key">Status</div><div class="c-val">${(p.countermeasure||{}).status||'—'}</div></div>
         </div>
@@ -2731,7 +2207,7 @@ async function exportPDF(){
         ${pActions.map(a=>`<div class="action-row">
           <span class="act-status" style="color:${a.status==='complete'?'#166534':a.status==='in-progress'?'#1a5fb4':'#b45309'}">${a.status==='in-progress'?'In Progress':a.status.charAt(0).toUpperCase()+a.status.slice(1)}</span>
           <span style="flex:1">${a.title}</span>
-          <span style="color:#9aa0b0">${(_cache.users||[]).find(u=>u.id===a.owner)?.name||'—'}</span>
+          <span style="color:#9aa0b0">${(_c.users||[]).find(u=>u.id===a.owner)?.name||'—'}</span>
           <span style="color:#9aa0b0;width:80px;text-align:right">${a.dueDate||''}</span>
         </div>`).join('')}
       </div>`:''}
@@ -2746,7 +2222,6 @@ async function exportPDF(){
   w.document.write(html);
   w.document.close();
   w.onload=()=>{ setTimeout(()=>{ w.focus(); w.print(); },300); };
-  hideLoading();
   showNotif('PDF ready — use your browser print dialog to save.','success');
 }
 
@@ -2926,7 +2401,7 @@ async function buildPBIDatasets(){
   // 5. Action Completion Rate — by owner
   const ownerMap={};
   actions.forEach(a=>{
-    const user=(_cache.users||[]).find(u=>u.id===a.owner);
+    const user=(_c.users||[]).find(u=>u.id===a.owner);
     const name=user?user.name:'Unknown';
     if(!ownerMap[name])ownerMap[name]={Owner:name,Total:0,Complete:0,InProgress:0,Open:0,Overdue:0};
     ownerMap[name].Total++;
@@ -2964,8 +2439,8 @@ async function downloadAllPBIData(){
   const payload={
     generatedAt:new Date().toISOString(),
     generatedBy:currentUser.name,
-    totalProblems:(_cache.problems||[]).length,
-    totalActions:(_cache.actions||[]).length,
+    totalProblems:getProblems().length,
+    totalActions:getActions().length,
     datasets:datasets.map(ds=>({tableName:ds.name,rows:ds.rows}))
   };
   triggerDownload(JSON.stringify(payload,null,2),'application/json',`3c_powerbi_export_${new Date().toISOString().split('T')[0]}.json`);
@@ -3257,16 +2732,16 @@ function refreshPBIEmbed(){
 }
 
 function buildSDKEmbedSnippet(cfg){
+  const s='script';
   return`<!-- 1. Include powerbi-client from CDN -->
-<script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"><\/script>
+<${s} src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></${s}>
 
 <!-- 2. Container div -->
 <div id="pbi-report-container" style="height:560px;"></div>
 
-<script>
-  // Fetch a fresh embed token from YOUR backend first
+<${s}>
+  // Fetch embed token from your backend first
   const embedToken = await fetch('/api/pbi-token').then(r=>r.json());
-
   const models = window['powerbi-client'].models;
   const embedConfig = {
     type: 'report',
@@ -3274,20 +2749,12 @@ function buildSDKEmbedSnippet(cfg){
     embedUrl: '${cfg.embedUrl||'https://app.powerbi.com/reportEmbed?reportId=...'}',
     accessToken: embedToken,
     tokenType: models.TokenType.Embed,
-    settings: {
-      navContentPaneEnabled: true,
-      filterPaneEnabled: true,
-      background: models.BackgroundType.Transparent,
-    }
+    settings: { navContentPaneEnabled: true, filterPaneEnabled: true }
   };
-
-  const container = document.getElementById('pbi-report-container');
-  const report = powerbi.embed(container, embedConfig);
-
-  // React to events
+  const report = powerbi.embed(document.getElementById('pbi-report-container'), embedConfig);
   report.on('loaded', () => console.log('Report loaded'));
   report.on('error', e => console.error('Embed error:', e.detail));
-<\/script>`;
+</${s}>`;
 }
 
 function copyEmbedSDKCode(){
@@ -3345,6 +2812,32 @@ function selectCombo(inputId, ddId, value, isNew){
 function closeCombo(ddId){
   const dd=document.getElementById(ddId);
   if(dd) dd.classList.remove('open');
+}
+
+// ══════════════════════════════════════════════
+// PROFILE — Change Password
+// ══════════════════════════════════════════════
+function openChangeMyPassword(){
+  document.getElementById('modal-title').textContent='Change Password';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="field mb-12"><label>Current Password</label><input type="password" id="cp-old" placeholder="Current password"></div>
+    <div class="field mb-12"><label>New Password</label><input type="password" id="cp-new" placeholder="Min. 6 characters"></div>
+    <div class="field"><label>Confirm New Password</label><input type="password" id="cp-confirm" placeholder="Repeat new password"></div>
+  `;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveMyPassword()">Update Password</button>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function saveMyPassword(){
+  const newP=document.getElementById('cp-new').value;
+  const conf=document.getElementById('cp-confirm').value;
+  if(newP.length<6){showNotif('New password must be at least 6 characters.','error');return;}
+  if(newP!==conf){showNotif('Passwords do not match.','error');return;}
+  try { await sbUpdatePassword(newP); closeModal(); showNotif('Password updated.','success'); }
+  catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 function showNotif(msg,type=''){
