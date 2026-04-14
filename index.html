@@ -757,7 +757,7 @@ function queueWrite(fn, args) {
 }
 
 async function flushOfflineQueue() {
-  if (!offlineQueue.length || !navigator.onLine) return;
+  if (!offlineQueue.length || !isOnline()) return;
   const queue = [...offlineQueue];
   offlineQueue = [];
   saveOfflineQueue();
@@ -791,14 +791,20 @@ function setCache(key, data) {
 window.addEventListener('online',  () => { updateOnlineStatus(); flushOfflineQueue(); });
 window.addEventListener('offline', () => updateOnlineStatus());
 
+function isOnline() {
+  // isOnline() can return false incorrectly in some environments
+  // Default to true and let fetch errors handle actual offline state
+  return isOnline() !== false;
+}
+
 function updateOnlineStatus() {
   const banner = document.getElementById('offline-banner');
-  if (banner) banner.classList.toggle('show', !navigator.onLine);
+  if (banner) banner.classList.toggle('show', !isOnline());
 }
 
 // ── DATA LAYER — USERS ────────────────────────────────────────
 async function getUsers() {
-  if (!navigator.onLine) return _cache.users;
+  if (!isOnline()) return _cache.users;
   try {
     const rows = await dbSelect('profiles', { order: 'full_name' });
     const mapped = rows.map(u => ({
@@ -823,7 +829,7 @@ async function saveUserProfile(userId, updates) {
 
 // ── DATA LAYER — PROBLEMS ─────────────────────────────────────
 async function getProblems() {
-  if (!navigator.onLine) return _cache.problems;
+  if (!isOnline()) return _cache.problems;
   try {
     const rows = await dbSelect('v_problems', { order: 'created_at.desc' });
     const mapped = rows.map(mapDbProblem);
@@ -884,7 +890,7 @@ function mapDbProblem(p) {
 }
 
 async function saveProblem(p) {
-  if (!navigator.onLine) { queueWrite('saveProblem', [p]); return p; }
+  if (!isOnline()) { queueWrite('saveProblem', [p]); return p; }
   const row = {
     id: p.id,
     title: p.title,
@@ -922,7 +928,7 @@ async function saveProblem(p) {
 
 async function getProblemWithDetails(id) {
   if (!id) return null;
-  if (!navigator.onLine) return _cache.problems.find(x => x.id === id) || null;
+  if (!isOnline()) return _cache.problems.find(x => x.id === id) || null;
   try {
     // Try view first, fall back to direct table
     let pData;
@@ -966,7 +972,7 @@ async function getProblemWithDetails(id) {
 
 // ── DATA LAYER — ACTIONS ──────────────────────────────────────
 async function getActions(problemId) {
-  if (!navigator.onLine) {
+  if (!isOnline()) {
     const cached = _cache.actions;
     return problemId ? cached.filter(a => a.problemId === problemId) : cached;
   }
@@ -1007,7 +1013,7 @@ async function getActions(problemId) {
 }
 
 async function saveAction(a) {
-  if (!navigator.onLine) { queueWrite('saveAction', [a]); return; }
+  if (!isOnline()) { queueWrite('saveAction', [a]); return; }
   const row = {
     id: a.id, problem_id: a.problemId, title: a.title,
     owner_id: a.owner || null, due_date: a.dueDate || null,
@@ -1065,7 +1071,7 @@ async function deletePhoto(path, photoRowId) {
 
 // ── DATA LAYER — DEPTS/PROCESSES ─────────────────────────────
 async function getStoredDepts() {
-  if (!navigator.onLine) return _cache.depts;
+  if (!isOnline()) return _cache.depts;
   try {
     const rows = await dbSelect('departments', { order: 'name' });
     const names = rows.map(d => d.name);
@@ -1074,7 +1080,7 @@ async function getStoredDepts() {
 }
 
 async function getStoredProcesses() {
-  if (!navigator.onLine) return _cache.procs;
+  if (!isOnline()) return _cache.procs;
   try {
     const rows = await dbSelect('processes', { order: 'name' });
     const names = rows.map(d => d.name);
