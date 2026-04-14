@@ -819,7 +819,11 @@ async function uploadPhoto(problemId, section, dataUrl) {
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_token,'Content-Type':blob.type},
     body:blob
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const errText = await res.text().catch(()=>'');
+    console.error('Photo upload failed:', res.status, errText);
+    return null;
+  }
   await dbPost('problem_photos', {problem_id:problemId,section,storage_path:path,uploaded_by:currentUser?.id||null}).catch(()=>{});
   return path;
 }
@@ -835,15 +839,34 @@ async function deleteDetailPhoto(problemId, section, idx) {
       await addAuditEntry(problemId,'Photo removed from '+section);
     }
   } catch(e){}
-  window._activeDetailTab='tab-'+(section==='countermeasure'?'counter':section);
+  window._activeDetailTab=sectionToTab(section);
   renderDetail();
+}
+
+// Map section name to tab ID
+function sectionToTab(section){
+  const map = {
+    'concern':'tab-concern',
+    'cause':'tab-cause',
+    'cause-staff':'tab-cause',   // staff photos are on the cause tab
+    'countermeasure':'tab-counter'
+  };
+  return map[section] || 'tab-cause';
 }
 
 async function addDetailPhoto(section, src) {
   if (!currentDetailId) return;
-  await uploadPhoto(currentDetailId, section, src);
+  showNotif('Uploading photo…','');
+  const path = await uploadPhoto(currentDetailId, section, src);
+  if (!path) {
+    showNotif('Photo upload failed — check Supabase storage bucket exists.','error');
+    window._activeDetailTab = sectionToTab(section);
+    renderDetail();
+    return;
+  }
   await addAuditEntry(currentDetailId, 'Photo added to '+section);
-  window._activeDetailTab='tab-'+(section==='countermeasure'?'counter':section);
+  showNotif('Photo saved.','success');
+  window._activeDetailTab = sectionToTab(section);
   renderDetail();
 }
 
