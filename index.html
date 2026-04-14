@@ -686,7 +686,7 @@ function _mapP(p) {
     closedDate:p.closed_date?new Date(p.closed_date).getTime():null,
     created:p.created_at?new Date(p.created_at).getTime():(p.created||Date.now()),
     updated:p.updated_at?new Date(p.updated_at).getTime():(p.updated||Date.now()),
-    concernPhotos:[], causePhotos:[], countermeasurePhotos:[], audit:[],
+    concernPhotos:[], causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
     photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
 }
@@ -788,6 +788,7 @@ async function getProblemWithDetails(id) {
         }
         if (ph.section==='concern') p.concernPhotos.push(src);
         else if (ph.section==='cause') p.causePhotos.push(src);
+        else if (ph.section==='cause-staff') p.causeStaffPhotos.push(src);
         else if (ph.section==='countermeasure') p.countermeasurePhotos.push(src);
       }
     } catch(e){ console.warn('Photos fetch error:', e.message); }
@@ -1238,7 +1239,7 @@ async function submitConcern(){
       concernPhotos:window._createPhotos, reportedById:currentUser.id,
       reportedByName:currentUser.name, status:'new',
       created:Date.now(), updated:Date.now(),
-      cause:{}, countermeasure:{}, causePhotos:[], countermeasurePhotos:[], audit:[],
+      cause:{}, countermeasure:{}, causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
     };
     try {
       const saved = await saveProblem(p);
@@ -1347,6 +1348,7 @@ function calcProblemCompletion(p){
   const hasPhoto = (p.photoCount||0) > 0 ||
     (p.concernPhotos||[]).length > 0 ||
     (p.causePhotos||[]).length > 0 ||
+    (p.causeStaffPhotos||[]).length > 0 ||
     (p.countermeasurePhotos||[]).length > 0;
   if(hasPhoto) score++;
   return Math.round(score/max*100);
@@ -1460,15 +1462,41 @@ async function renderDetail(){
                 ${['','Man','Machine','Method','Material','Measurement','Environment'].map(c=>`<option ${(p.cause||{}).type===c?'selected':''}>${c}</option>`).join('')}
               </select></div>
             <div class="field"><label>Analysis Tool</label>
-              <select id="d-causetool" ${!canEdit?'disabled':''}>
-                ${['','5 Whys','Fishbone / Ishikawa','Fault Tree','FMEA','Direct Observation','Other'].map(c=>`<option ${(p.cause||{}).tools===c?'selected':''}>${c}</option>`).join('')}
-              </select></div>
+              <input list="analysis-tools-list" id="d-causetool" type="text"
+                placeholder="e.g. 5 Whys, Fishbone…"
+                value="${esc((p.cause||{}).tools||'')}"
+                ${!canEdit?'disabled':''}>
+              <datalist id="analysis-tools-list">
+                <option value="5 Whys">
+                <option value="Fishbone / Ishikawa">
+                <option value="Fault Tree Analysis">
+                <option value="FMEA">
+                <option value="Direct Observation">
+                <option value="8D Report">
+                <option value="A3 Problem Solving">
+                <option value="PDCA">
+                <option value="Control Chart">
+                <option value="Pareto Analysis">
+                <option value="DMAIC">
+                <option value="Poka-Yoke Analysis">
+                <option value="Gemba Walk">
+                <option value="Value Stream Mapping">
+                <option value="Other">
+              </datalist>
+            </div>
           </div>
           <div class="field mb-12"><label>Supporting Evidence</label>
             <textarea id="d-causeevidence" placeholder="Data, observations, measurements…" ${!canEdit?'disabled':''}>${esc((p.cause||{}).evidence||'')}</textarea></div>
+
           <div class="form-section-title">Cause Evidence Photos</div>
           <div class="photo-grid" id="cause-photos-grid"></div>
-          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause')"><span class="icon">📷</span><span>Add Photo</span></button>`:''}
+          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause')"><span class="icon">📷</span><span>Add Evidence Photo</span></button>`:''}
+
+          <div class="form-section-title mt-16">Staff Using CI Tools</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Photos showing team members actively using the analysis tool</div>
+          <div class="photo-grid" id="cause-staff-photos-grid"></div>
+          ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause-staff')"><span class="icon">📷</span><span>Add Staff Photo</span></button>`:''}
+
           ${canEdit?`<div class="flex justify-end mt-16"><button class="btn btn-primary btn-sm" onclick="saveCauseSection('${p.id}')">Save Cause</button></div>`:''}
         </div>
       </div>
@@ -1530,6 +1558,7 @@ async function renderDetail(){
   // render photos
   renderDetailPhotos('concern-photos-grid',p.concernPhotos||[],'concern',p.id,canEdit);
   renderDetailPhotos('cause-photos-grid',p.causePhotos||[],'cause',p.id,canEdit);
+  renderDetailPhotos('cause-staff-photos-grid',p.causeStaffPhotos||[],'cause-staff',p.id,canEdit);
   renderDetailPhotos('counter-photos-grid',p.countermeasurePhotos||[],'countermeasure',p.id,canEdit);
 
   // restore active tab
