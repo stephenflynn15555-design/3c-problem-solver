@@ -854,6 +854,7 @@ function aid(){ return crypto.randomUUID?crypto.randomUUID():'a'+Date.now()+'_'+
 async function nextProblemId(){ const ps=await getProblems(); return 'RPT-'+String(ps.length+1).padStart(4,'0'); }
 
 // ── STATUS CONSTANTS ──────────────────────────────────────────
+const STATUS_FLOW = ['new','cause-defined','countermeasure-defined','closed'];
 const STATUS_LABELS = {
   'new':'New','cause-defined':'Cause Defined',
   'countermeasure-defined':'Countermeasure Defined','closed':'Closed'
