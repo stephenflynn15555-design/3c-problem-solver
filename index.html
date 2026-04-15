@@ -1358,7 +1358,7 @@ function filteredProblems(ps){
     const q=listFilter.search.toLowerCase();
     list=list.filter(p=>(p.title+p.dept+p.problemId+p.category).toLowerCase().includes(q));
   }
-  return list.sort((a,b)=>a.created-b.created);
+  return list.sort((a,b)=>b.created-a.created);
 }
 
 function buildProblemTable(ps){
