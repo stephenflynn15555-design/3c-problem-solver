@@ -693,7 +693,14 @@ function _mapP(p) {
 
 async function getProblems() {
   try {
-    const rows = await dbGet('problems', {order:'created_at.desc'});
+    // Use v_problems view to get photo_count, action_count etc for accurate completion %
+    let rows;
+    try {
+      rows = await dbGet('v_problems', {order:'created_at.desc'});
+    } catch(e) {
+      // Fall back to direct table if view not accessible
+      rows = await dbGet('problems', {order:'created_at.desc'});
+    }
     const m = rows.map(_mapP); sc('problems',m); return m;
   } catch(e) { return _c.problems; }
 }
@@ -1351,7 +1358,7 @@ function filteredProblems(ps){
     const q=listFilter.search.toLowerCase();
     list=list.filter(p=>(p.title+p.dept+p.problemId+p.category).toLowerCase().includes(q));
   }
-  return list.sort((a,b)=>b.created-a.created);
+  return list.sort((a,b)=>a.created-b.created);
 }
 
 function buildProblemTable(ps){
