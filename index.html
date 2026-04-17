@@ -229,6 +229,7 @@ a{color:var(--blue);text-decoration:none;}
 .form-row{display:grid;gap:1rem;}
 .form-row-2{grid-template-columns:1fr 1fr;}
 .form-row-3{grid-template-columns:1fr 1fr 1fr;}
+.form-row-3{grid-template-columns:1fr 1fr 1fr;}
 
 /* TABS */
 .tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:1.5rem;gap:0;}
@@ -661,6 +662,92 @@ const _c = {
 };
 function sc(k,v){ _c[k]=v; localStorage.setItem('3c_c_'+({users:'users',problems:'probs',actions:'acts',depts:'depts',procs:'procs'}[k]||k), JSON.stringify(v)); }
 
+// ── ESCALATION CONFIG ─────────────────────────────────────────
+const ESCALATION_DAYS = {
+  new: 3,               // flag if still 'new' after 3 days
+  'cause-defined': 5,   // flag if cause defined but no CM after 5 days
+  'countermeasure-defined': 7 // flag if CM defined but not closed after 7 days
+};
+
+function isProblemStale(p) {
+  if (p.status === 'closed') return false;
+  const days = Math.floor((Date.now() - p.updated) / 86400000);
+  const threshold = ESCALATION_DAYS[p.status];
+  return threshold ? days >= threshold : false;
+}
+
+function isActionDueSoon(a) {
+  if (a.status === 'complete' || !a.dueDate) return false;
+  const daysUntil = Math.ceil((new Date(a.dueDate) - Date.now()) / 86400000);
+  return daysUntil >= 0 && daysUntil <= 2;
+}
+
+function isActionOverdue(a) {
+  if (a.status === 'complete' || !a.dueDate) return false;
+  return new Date(a.dueDate) < new Date();
+}
+
+// ── PLANNER CONFIG ────────────────────────────────────────────
+function getPlannerConfig() {
+  return JSON.parse(localStorage.getItem('3c_planner_cfg') || '{}');
+}
+function savePlannerConfig(cfg) {
+  localStorage.setItem('3c_planner_cfg', JSON.stringify(cfg));
+}
+
+async function pushActionToPlanner(action, problemTitle) {
+  const cfg = getPlannerConfig();
+  if (!cfg.enabled || !cfg.accessToken || !cfg.planId || !cfg.bucketId) return false;
+  try {
+    // Create task in Planner via Microsoft Graph
+    const dueDateTime = action.dueDate ? new Date(action.dueDate).toISOString() : null;
+    const body = {
+      planId: cfg.planId,
+      bucketId: cfg.bucketId,
+      title: `[${action.problemRef||'3C'}] ${action.title}`,
+      dueDateTime,
+      assignments: {}
+    };
+    const res = await fetch('https://graph.microsoft.com/v1.0/planner/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.accessToken
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      console.error('Planner push failed:', err);
+      return false;
+    }
+    const task = await res.json();
+    // Store the Planner task ID on the action for future updates
+    await dbPatch('actions', {planner_task_id: task.id}, 'id', action.id).catch(()=>{});
+    return true;
+  } catch(e) {
+    console.error('Planner error:', e.message);
+    return false;
+  }
+}
+
+async function syncAllActionToPlanner() {
+  const cfg = getPlannerConfig();
+  if (!cfg.enabled || !cfg.accessToken) {
+    showNotif('Planner not configured or no access token. See Admin → Integrations.', 'error');
+    return;
+  }
+  showNotif('Syncing actions to Planner…', '');
+  const actions = await getActions();
+  const open = actions.filter(a => a.status !== 'complete');
+  let pushed = 0, failed = 0;
+  for (const a of open) {
+    const ok = await pushActionToPlanner(a, '');
+    if (ok) pushed++; else failed++;
+  }
+  showNotif(`Planner sync: ${pushed} pushed${failed?' · '+failed+' failed':''}`, failed?'error':'success');
+}
+
 // ── DATA: USERS ───────────────────────────────────────────────
 async function getUsers() {
   try {
@@ -687,6 +774,8 @@ function _mapP(p) {
     created:p.created_at?new Date(p.created_at).getTime():(p.created||Date.now()),
     updated:p.updated_at?new Date(p.updated_at).getTime():(p.updated||Date.now()),
     concernPhotos:[], causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
+    signoffs: p.signoffs || [],
+    comments: p.comments || [],
     photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
 }
@@ -1026,8 +1115,45 @@ function initApp(){
   document.querySelectorAll('[data-page]').forEach(el=>{
     el.addEventListener('click',()=>goTo(el.dataset.page));
   });
+  // Load saved escalation thresholds
+  ESCALATION_DAYS.new = parseInt(localStorage.getItem('3c_stale_new'))||3;
+  ESCALATION_DAYS['cause-defined'] = parseInt(localStorage.getItem('3c_stale_cause'))||5;
+  ESCALATION_DAYS['countermeasure-defined'] = parseInt(localStorage.getItem('3c_stale_cm'))||7;
+
   updateBadges();
   goTo('dashboard');
+  // Show login reminder after short delay so dashboard renders first
+  setTimeout(showLoginReminder, 800);
+  // Handle deep link ?open=problemId
+  if(window._pendingOpenId){
+    const id = window._pendingOpenId;
+    window._pendingOpenId = null;
+    setTimeout(()=>{ currentDetailId=id; goTo('detail'); }, 300);
+  }
+  // Handle TV mode
+  if(window._pendingTVMode){
+    window._pendingTVMode = false;
+    setTimeout(enterTVMode, 500);
+  }
+}
+
+async function showLoginReminder(){
+  const actions = await getActions();
+  const myOverdue = actions.filter(a=>a.owner===currentUser.id && isActionOverdue(a));
+  const myDueSoon = actions.filter(a=>a.owner===currentUser.id && isActionDueSoon(a));
+  if(!myOverdue.length && !myDueSoon.length) return;
+  const lines = [];
+  if(myOverdue.length) lines.push(`🔴 ${myOverdue.length} overdue action${myOverdue.length>1?'s':''}`);
+  if(myDueSoon.length) lines.push(`🟡 ${myDueSoon.length} action${myDueSoon.length>1?'s':''} due within 2 days`);
+  showNotif('Your actions: '+lines.join(' · '), myOverdue.length?'error':'warning');
+  // Send email notification for overdue actions (max once per day per user via localStorage throttle)
+  const throttleKey = '3c_notif_sent_'+currentUser.id+'_'+new Date().toDateString();
+  if(myOverdue.length && !localStorage.getItem(throttleKey)){
+    localStorage.setItem(throttleKey,'1');
+    for(const a of myOverdue.slice(0,3)){
+      notifyActionOverdue(a, currentUser.username+'@3capp.local').catch(()=>{});
+    }
+  }
 }
 
 function goTo(page){
@@ -1074,12 +1200,24 @@ async function renderDashboard(){
   const today = new Date(); today.setHours(0,0,0,0);
   const total=visible.length, open=visible.filter(p=>p.status!=='closed').length;
   const closed=visible.filter(p=>p.status==='closed').length;
-  const overdue=actions.filter(a=>a.status!=='complete'&&a.dueDate&&new Date(a.dueDate)<today).length;
+  const overdue=actions.filter(a=>isActionOverdue(a)).length;
   const high=visible.filter(p=>p.severity==='High'&&p.status!=='closed').length;
   const avgClose = calcAvgClose(visible);
   const recent = [...visible].sort((a,b)=>b.created-a.created).slice(0,5);
 
+  // Escalation — stale problems
+  const stale = visible.filter(p=>isProblemStale(p));
+
+  // Personal reminders — actions owned by current user
+  const myActions = actions.filter(a=>a.owner===currentUser.id);
+  const myOverdue = myActions.filter(a=>isActionOverdue(a));
+  const myDueSoon = myActions.filter(a=>isActionDueSoon(a));
+
   document.getElementById('page-dashboard').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div></div>
+      <button class="btn btn-ghost btn-sm" onclick="enterTVMode()" title="Open full-screen TV display">📺 TV Mode</button>
+    </div>
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-val stat-blue">${total}</div><div class="stat-label">Total Problems</div></div>
       <div class="stat-card"><div class="stat-val stat-amber">${open}</div><div class="stat-label">Open</div></div>
@@ -1097,6 +1235,49 @@ async function renderDashboard(){
         <button class="btn btn-ghost btn-sm ml-auto" onclick="filterToHigh()">View →</button>
       </div></div>`:''}
 
+    ${stale.length>0?`<div class="card mb-16" style="border-left:4px solid var(--amber);">
+      <div class="card-header">
+        <span style="font-size:16px;">⏰</span>
+        <div class="card-title" style="color:var(--amber)">Stale Problems — No Progress</div>
+      </div>
+      <div class="card-body-p0">
+        <table class="data-table"><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Last Updated</th><th>Days Stale</th></tr></thead><tbody>
+        ${stale.map(p=>{
+          const days=Math.floor((Date.now()-p.updated)/86400000);
+          return`<tr onclick="openDetail('${p.id}')" style="cursor:pointer">
+            <td><span class="font-mono text-blue text-xs">${p.problemId}</span></td>
+            <td>${esc(p.title)}</td>
+            <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
+            <td class="text-muted text-xs">${new Date(p.updated).toLocaleDateString('en-IE')}</td>
+            <td><span class="badge-overdue">${days}d</span></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>
+      </div>
+    </div>`:''}
+
+    ${(myOverdue.length||myDueSoon.length)?`<div class="card mb-16" style="border-left:4px solid var(--blue);">
+      <div class="card-header">
+        <span style="font-size:16px;">🔔</span>
+        <div class="card-title">Your Action Reminders</div>
+      </div>
+      <div class="card-body">
+        ${myOverdue.length?`<div style="font-weight:600;color:var(--red);margin-bottom:8px;font-size:13px;">⚠ Overdue (${myOverdue.length})</div>
+          ${myOverdue.map(a=>`<div class="action-card overdue" style="margin-bottom:8px;cursor:pointer" onclick="goTo('actions')">
+            <div class="font-500 text-sm">${esc(a.title)}</div>
+            <div class="text-xs text-muted mt-4">Due: ${a.dueDate} · ${esc(a.ownerName||'')}</div>
+          </div>`).join('')}`:''}
+        ${myDueSoon.length?`<div style="font-weight:600;color:var(--amber);margin:${myOverdue.length?'12px':0} 0 8px;font-size:13px;">📅 Due Soon (${myDueSoon.length})</div>
+          ${myDueSoon.map(a=>{
+            const daysLeft=Math.ceil((new Date(a.dueDate)-Date.now())/86400000);
+            return`<div class="action-card" style="margin-bottom:8px;cursor:pointer" onclick="goTo('actions')">
+              <div class="font-500 text-sm">${esc(a.title)}</div>
+              <div class="text-xs text-muted mt-4">Due: ${a.dueDate} · ${daysLeft===0?'Today':daysLeft+'d'}</div>
+            </div>`;
+          }).join('')}`:''}
+      </div>
+    </div>`:''}
+
     <div class="card mb-16">
       <div class="card-header"><div class="card-title">Recent Problems</div>
         <button class="btn btn-ghost btn-sm ml-auto" onclick="goTo('problems')">View all</button></div>
@@ -1105,7 +1286,7 @@ async function renderDashboard(){
           `<table class="data-table"><thead><tr><th>ID</th><th>Title</th><th>Dept</th><th>Sev</th><th>Status</th><th>Age</th></tr></thead><tbody>
           ${recent.map(p=>`<tr onclick="openDetail('${p.id}')">
             <td><span class="font-mono text-blue">${p.problemId}</span></td>
-            <td>${p.title}</td><td>${p.dept}</td>
+            <td>${esc(p.title)}</td><td>${p.dept}</td>
             <td><span class="pill ${sevClass(p.severity)}">${p.severity}</span></td>
             <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
             <td>${ageChip(p)}</td>
@@ -1125,6 +1306,29 @@ async function renderDashboard(){
         }).join('')}
       </div>
     </div>
+
+    ${(()=>{
+      const recurring = detectRecurringProblems(visible);
+      if(!recurring.length) return '';
+      return `<div class="card mt-16" style="border-left:4px solid var(--red)">
+        <div class="card-header">
+          <span style="font-size:16px">🔁</span>
+          <div class="card-title" style="color:var(--red)">Recurring Issues — Last 30 Days</div>
+        </div>
+        <div class="card-body">
+          <div class="text-sm text-muted mb-12">Same department + category appearing 3+ times. May indicate a systemic issue.</div>
+          ${recurring.map(r=>`
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:22px;font-weight:700;color:var(--red);min-width:32px">${r.count}×</span>
+              <div>
+                <span class="pill ${catClass(r.category)}">${r.category}</span>
+                <span class="text-sm ml-8">${esc(r.dept||'')}</span>
+              </div>
+              <button class="btn btn-ghost btn-sm ml-auto" onclick="listFilter.cat='${r.category}';listFilter.search='${r.dept||''}';goTo('problems')">View →</button>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    })()}
   `;
 }
 
@@ -1162,7 +1366,33 @@ async function renderCreate(){
   let ep = {};
   if(isEdit){ ep=(await getProblems()).find(p=>p.id===editingProblemId)||{}; }
 
+  const templates = [
+    {name:'Machine Downtime', icon:'⚙', category:'Downtime', severity:'High',
+      title:'Machine downtime — [Machine Name]',
+      description:'Equipment stopped unexpectedly. Production impacted.\n\nMachine: \nLine/Cell: \nTime stopped: \nEstimated units lost: '},
+    {name:'Quality Defect', icon:'🔍', category:'Quality', severity:'Medium',
+      title:'Quality defect — [Defect Type]',
+      description:'Non-conformance detected during inspection.\n\nDefect type: \nDetection point: \nBatch/lot number: \nQuantity affected: '},
+    {name:'Safety Near Miss', icon:'⚠', category:'Safety', severity:'High',
+      title:'Safety near miss — [Location]',
+      description:'Near miss incident observed. No injury but potential for harm.\n\nLocation: \nActivity at time: \nPotential injury: \nWitnesses: '},
+    {name:'Cost Overrun', icon:'💰', category:'Cost', severity:'Medium',
+      title:'Cost overrun — [Area]',
+      description:'Unexpected cost identified.\n\nArea: \nExpected cost: \nActual cost: \nVariance: '},
+  ];
+
   document.getElementById('page-create').innerHTML=`
+    ${!isEdit?`<div class="card mb-16">
+      <div class="card-header"><div class="card-title">Quick Templates</div><div class="text-xs text-muted ml-auto">Select a template to pre-fill the form</div></div>
+      <div class="card-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        ${templates.map((t,i)=>`
+          <button onclick="applyTemplate(${i})" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:12px;text-align:center;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:24px;margin-bottom:6px">${t.icon}</div>
+            <div style="font-size:13px;font-weight:600">${t.name}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">${t.severity} · ${t.category}</div>
+          </button>`).join('')}
+      </div>
+    </div>`:''}
     <div class="card">
       <div class="card-header">
         <div class="step-badge step-c1">C1</div>
@@ -1298,7 +1528,10 @@ async function submitConcern(){
       await addAuditEntry(currentDetailId,'Concern created by '+currentUser.name);
       for(const src of window._createPhotos) await uploadPhoto(currentDetailId,'concern',src);
     } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-    if(sev==='High') showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
+    if(sev==='High'){
+      showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
+      notifyHighSeverity({...p, problemId: saved.problemId||p.problemId}).catch(()=>{});
+    }
     else showNotif('Concern logged.','success');
     window._createPhotos=[];
     updateBadges();
@@ -1368,10 +1601,11 @@ function buildProblemTable(ps){
   </tr></thead><tbody>
   ${ps.map(p=>{
     const pct=calcProblemCompletion(p);
-    return`<tr onclick="openDetail('${p.id}')">
-      <td><span class="font-mono text-blue text-xs">${p.problemId}</span></td>
-      <td><div style="font-weight:500">${p.title}</div><div class="text-xs text-muted">${p.reportedByName}</div></td>
-      <td class="text-sm">${p.dept}</td>
+    const stale=isProblemStale(p);
+    return`<tr onclick="openDetail('${p.id}')" ${stale?'style="background:var(--amber-bg)"':''}>
+      <td><span class="font-mono text-blue text-xs">${p.problemId}</span>${stale?'<span class="badge-overdue ml-4" title="No progress">Stale</span>':''}</td>
+      <td><div style="font-weight:500">${esc(p.title)}</div><div class="text-xs text-muted">${esc(p.reportedByName||'')}</div></td>
+      <td class="text-sm">${esc(p.dept||'')}</td>
       <td><span class="pill ${catClass(p.category)}">${p.category}</span></td>
       <td><span class="pill ${sevClass(p.severity)}">${p.severity}</span></td>
       <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
@@ -1443,7 +1677,11 @@ async function renderDetail(){
       <span class="pill ${sevClass(p.severity)}">${p.severity}</span>
       <span class="pill ${catClass(p.category)}">${p.category}</span>
       <span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span>
-      <span class="text-muted text-xs ml-auto">${new Date(p.created).toLocaleString('en-IE')}</span>
+      <span class="text-muted text-xs">${new Date(p.created).toLocaleString('en-IE')}</span>
+      <div class="flex gap-8 ml-auto">
+        <button class="btn btn-ghost btn-sm" onclick="printA3Report('${p.id}')" title="Print A3 Report">🖨 Print A3</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRCode('${p.id}','${p.problemId}')" title="Show QR Code">⊞ QR Code</button>
+      </div>
     </div>
 
     ${buildStepper(p.status)}
@@ -1472,6 +1710,8 @@ async function renderDetail(){
       <div class="tab" onclick="detailTab(this,'tab-cause')">C2 — Cause</div>
       <div class="tab" onclick="detailTab(this,'tab-counter')">C3 — Countermeasure</div>
       <div class="tab" onclick="detailTab(this,'tab-actions')">Actions (${actions.length})</div>
+      <div class="tab" onclick="detailTab(this,'tab-comments')">Comments</div>
+      <div class="tab" onclick="detailTab(this,'tab-signoff')">Sign-off</div>
       <div class="tab" onclick="detailTab(this,'tab-audit')">Audit Trail</div>
     </div>
 
@@ -1593,14 +1833,72 @@ async function renderDetail(){
       </div>
     </div>
 
+    <div id="tab-comments" class="hidden">
+      <div class="card mb-16">
+        <div class="card-header"><div class="card-title">Discussion</div></div>
+        <div class="card-body">
+          <div id="comments-list">
+            ${(p.comments||[]).length===0
+              ? '<div class="text-muted text-sm">No comments yet. Be the first to add one.</div>'
+              : (p.comments||[]).map(c=>`
+                <div style="display:flex;gap:10px;margin-bottom:14px">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--blue);flex-shrink:0">${esc(c.initials||'?')}</div>
+                  <div style="flex:1;background:var(--surface2);border-radius:var(--r);padding:10px 12px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                      <span style="font-weight:600;font-size:13px">${esc(c.name)}</span>
+                      <span style="font-size:11px;color:var(--text3)">${new Date(c.ts).toLocaleString('en-IE')}</span>
+                    </div>
+                    <div style="font-size:13px;line-height:1.5">${esc(c.text).replace(/\n/g,'<br>')}</div>
+                  </div>
+                </div>`).join('')}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--blue);flex-shrink:0">${currentUser.initials}</div>
+            <div style="flex:1">
+              <textarea id="comment-input" placeholder="Add a comment…" style="width:100%;min-height:72px;resize:vertical;margin-bottom:8px"></textarea>
+              <div class="flex justify-end">
+                <button class="btn btn-primary btn-sm" onclick="addComment('${p.id}')">Post Comment</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-signoff" class="hidden">
+      <div class="card mb-16">
+        <div class="card-header"><div class="card-title">Digital Sign-off</div></div>
+        <div class="card-body">
+          ${(p.signoffs||[]).length===0&&p.status!=='closed'?
+            `<div class="text-muted text-sm mb-16">No sign-offs yet. ${['manager','admin'].includes(currentUser.role)?'Add your approval below.':'Waiting for manager approval before closing.'}</div>`:''}
+          ${(p.signoffs||[]).map(s=>`
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--green-bg);border-radius:var(--r);margin-bottom:8px;border:1px solid var(--green-light)">
+              <span style="font-size:20px">✅</span>
+              <div>
+                <div style="font-weight:600;color:var(--green)">${esc(s.name)} <span style="font-size:11px;font-weight:400">(${esc(s.role)})</span></div>
+                <div style="font-size:12px;color:var(--text2)">${new Date(s.ts).toLocaleString('en-IE')} ${s.comment?'· '+esc(s.comment):''}</div>
+              </div>
+            </div>`).join('')}
+          ${['manager','admin','engineer'].includes(currentUser.role)&&!(p.signoffs||[]).find(s=>s.userId===currentUser.id)?`
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+              <div class="field mb-12"><label>Sign-off Comment (optional)</label>
+                <input type="text" id="signoff-comment" placeholder="e.g. Verified effective, root cause confirmed…"></div>
+              <button class="btn btn-green btn-sm" onclick="addSignoff('${p.id}')">✓ Add My Approval</button>
+            </div>`:''}
+          ${(p.signoffs||[]).find(s=>s.userId===currentUser.id)?`
+            <div style="font-size:13px;color:var(--text2);margin-top:8px">You have already signed off this problem.</div>`:''}
+        </div>
+      </div>
+    </div>
+
     <div id="tab-audit" class="hidden">
       <div class="card"><div class="card-body">
         ${(p.audit||[]).length===0?'<div class="text-muted text-sm">No audit entries.</div>':
           (p.audit||[]).map(a=>`<div class="audit-item">
             <div class="audit-dot"></div>
             <div class="audit-content">
-              <div class="audit-action">${a.action}</div>
-              <div class="audit-meta">${a.by} · ${new Date(a.ts).toLocaleString('en-IE')}</div>
+              <div class="audit-action">${esc(a.action)}</div>
+              <div class="audit-meta">${esc(a.by)} · ${new Date(a.ts).toLocaleString('en-IE')}</div>
             </div></div>`).join('')}
       </div></div>
     </div>
@@ -1614,8 +1912,8 @@ async function renderDetail(){
 
   // restore active tab
   const activeTab = window._activeDetailTab || 'tab-concern';
-  const allTabs = ['tab-concern','tab-cause','tab-counter','tab-actions','tab-audit'];
-  const tabLabelMap = {'tab-concern':0,'tab-cause':1,'tab-counter':2,'tab-actions':3,'tab-audit':4};
+  const allTabs = ['tab-concern','tab-cause','tab-counter','tab-actions','tab-comments','tab-signoff','tab-audit'];
+  const tabLabelMap = {'tab-concern':0,'tab-cause':1,'tab-counter':2,'tab-actions':3,'tab-comments':4,'tab-signoff':5,'tab-audit':6};
   allTabs.forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.classList.toggle('hidden', id!==activeTab);
@@ -1628,7 +1926,7 @@ async function renderDetail(){
 function detailTab(el,tabId){
   document.querySelectorAll('#page-detail .tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  ['tab-concern','tab-cause','tab-counter','tab-actions','tab-audit'].forEach(id=>{
+  ['tab-concern','tab-cause','tab-counter','tab-actions','tab-comments','tab-signoff','tab-audit'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.classList.toggle('hidden',id!==tabId);
   });
@@ -1841,7 +2139,16 @@ async function saveNewAction(problemId){
   const newAction={id:aid(),problemId,title,owner,dueDate:due,status:'open',comments:document.getElementById('a-comment').value,created:Date.now()};
   try { await saveAction(newAction); await addAuditEntry(problemId,'Action added: '+title); }
   catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-  closeModal(); showNotif('Action added.','success'); updateBadges();
+  // Push to Planner if configured
+  const cfg=getPlannerConfig();
+  if(cfg.enabled && cfg.accessToken) {
+    const ok = await pushActionToPlanner(newAction,'');
+    if(ok) showNotif('Action added + synced to Planner ✓','success');
+    else showNotif('Action added (Planner sync failed — check token)','warning');
+  } else {
+    showNotif('Action added.','success');
+  }
+  closeModal(); updateBadges();
   window._activeDetailTab='tab-actions';
   renderDetail();
 }
@@ -1911,6 +2218,10 @@ async function renderAnalytics(){
   const actionComplete=actions.filter(a=>a.status==='complete').length;
   const actionRate=actions.length?Math.round(actionComplete/actions.length*100):0;
 
+  // Trend data
+  const trend = buildTrendData(ps, 6);
+  const closureRateTrend = trend.map(t=>({...t, rate: t.created>0?Math.round(t.closed/t.created*100):0}));
+
   // Category pareto
   const byCat={};ps.forEach(p=>{byCat[p.category]=(byCat[p.category]||0)+1;});
   const catSorted=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
@@ -1921,7 +2232,7 @@ async function renderAnalytics(){
   const deptSorted=Object.entries(byDept).sort((a,b)=>b[1]-a[1]);
   const maxDept=deptSorted[0]?deptSorted[0][1]:1;
 
-  // Ageing
+  // Ageing buckets
   const buckets={'0-7d':0,'8-14d':0,'15-30d':0,'>30d':0};
   ps.filter(p=>p.status!=='closed').forEach(p=>{
     const d=Math.floor((Date.now()-p.created)/86400000);
@@ -1929,9 +2240,9 @@ async function renderAnalytics(){
     else if(d<=30) buckets['15-30d']++; else buckets['>30d']++;
   });
 
-  // Recurring issues (title similarity - simple keyword match)
+  // Recurring
   const repeats={};
-  ps.forEach(p=>{const k=p.dept+'-'+p.category;repeats[k]=(repeats[k]||0)+1;});
+  ps.forEach(p=>{const k=(p.dept||'?')+' · '+(p.category||'?');repeats[k]=(repeats[k]||0)+1;});
   const repeatIssues=Object.entries(repeats).filter(([k,v])=>v>1).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
   document.getElementById('page-analytics').innerHTML=`
@@ -1941,6 +2252,34 @@ async function renderAnalytics(){
       <div class="stat-card"><div class="stat-val stat-blue">${total?Math.round(closed/total*100):0}%</div><div class="stat-label">Closure Rate</div></div>
       <div class="stat-card"><div class="stat-val stat-blue">${avgClose}</div><div class="stat-label">Avg Days to Close</div></div>
       <div class="stat-card"><div class="stat-val stat-green">${actionRate}%</div><div class="stat-label">Action Completion</div></div>
+    </div>
+
+    <!-- TREND CHARTS -->
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">Problems Logged vs Closed — Last 6 Months</div>
+      </div>
+      <div class="card-body">
+        ${buildSVGLineChart(trend,[
+          {key:'created',label:'Logged',color:'#1a5fb4'},
+          {key:'closed',label:'Closed',color:'#22c55e'}
+        ],{width:700,height:180})}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Monthly Closure Rate %</div></div>
+        <div class="card-body">
+          ${buildSVGBarChart(closureRateTrend,'rate',{color:'#1a5fb4',width:400,height:140})}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">New Problems per Month</div></div>
+        <div class="card-body">
+          ${buildSVGBarChart(trend,'created',{color:'#f59e0b',width:400,height:140})}
+        </div>
+      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
@@ -1985,21 +2324,110 @@ async function renderAnalytics(){
         <div class="card-body">
           ${repeatIssues.length?repeatIssues.map(([k,v])=>`<div class="pareto-bar-wrap mb-8">
             <div class="pareto-label text-sm">${k}</div>
-            <div class="pareto-track"><div class="pareto-fill" style="background:var(--amber)"><span class="pareto-val">${v}x</span></div></div>
+            <div class="pareto-track"><div class="pareto-fill" style="width:${Math.round(v/repeatIssues[0][1]*100)}%;background:var(--amber)"><span class="pareto-val">${v}×</span></div></div>
           </div>`).join(''):'<div class="text-muted text-sm">No recurring patterns detected.</div>'}
         </div>
       </div>
     </div>
 
     <div class="flex gap-12 justify-end">
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="enterTVMode()">📺 TV Mode</button>
+      <button class="btn btn-ghost btn-sm" onclick="openExportModal()">⬇ Export</button>
       <button class="btn btn-primary btn-sm" onclick="exportPDF()">⬇ Export PDF</button>
     </div>
   `;
 }
 
 // ══════════════════════════════════════════════
-// ADMIN
+// PROBLEM TEMPLATES
+// ══════════════════════════════════════════════
+const PROBLEM_TEMPLATES = [
+  {name:'Machine Downtime', icon:'⚙', category:'Downtime', severity:'High',
+    title:'Machine downtime — [Machine Name]',
+    description:'Equipment stopped unexpectedly. Production impacted.\n\nMachine: \nLine/Cell: \nTime stopped: \nEstimated units lost: '},
+  {name:'Quality Defect', icon:'🔍', category:'Quality', severity:'Medium',
+    title:'Quality defect — [Defect Type]',
+    description:'Non-conformance detected during inspection.\n\nDefect type: \nDetection point: \nBatch/lot number: \nQuantity affected: '},
+  {name:'Safety Near Miss', icon:'⚠', category:'Safety', severity:'High',
+    title:'Safety near miss — [Location]',
+    description:'Near miss incident observed. No injury but potential for harm.\n\nLocation: \nActivity at time: \nPotential injury: \nWitnesses: '},
+  {name:'Cost Overrun', icon:'💰', category:'Cost', severity:'Medium',
+    title:'Cost overrun — [Area]',
+    description:'Unexpected cost identified.\n\nArea: \nExpected cost: \nActual cost: \nVariance: '},
+];
+
+function applyTemplate(idx){
+  const t = PROBLEM_TEMPLATES[idx];
+  if(!t) return;
+  const title = document.getElementById('c-title');
+  const desc = document.getElementById('c-desc');
+  const cat = document.getElementById('c-cat');
+  const sev = document.getElementById('c-sev');
+  if(title) title.value = t.title;
+  if(desc) desc.value = t.description;
+  if(cat) cat.value = t.category;
+  if(sev) sev.value = t.severity;
+  title?.focus();
+  title?.select();
+  showNotif(`Template applied: ${t.name}`, 'success');
+}
+
+// ══════════════════════════════════════════════
+// EMAIL NOTIFICATIONS (via Supabase Edge Function)
+// ══════════════════════════════════════════════
+function getEmailConfig(){
+  return JSON.parse(localStorage.getItem('3c_email_cfg')||'{}');
+}
+function saveEmailConfig(cfg){
+  localStorage.setItem('3c_email_cfg', JSON.stringify(cfg));
+}
+
+async function sendEmailNotification(type, data){
+  const cfg = getEmailConfig();
+  if(!cfg.enabled || !cfg.webhookUrl) return false;
+  // Send via webhook (e.g. Supabase Edge Function, Make.com, Zapier, n8n)
+  try {
+    const payload = {
+      type,           // 'high_severity' | 'action_overdue' | 'problem_assigned'
+      appUrl: window.location.origin + window.location.pathname,
+      ...data
+    };
+    const res = await fetch(cfg.webhookUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    return res.ok;
+  } catch(e){
+    console.warn('Email notification failed:', e.message);
+    return false;
+  }
+}
+
+async function notifyHighSeverity(problem){
+  const users = await getUsers();
+  const managers = users.filter(u=>['manager','admin'].includes(u.role));
+  await sendEmailNotification('high_severity',{
+    problemId: problem.problemId,
+    problemTitle: problem.title,
+    department: problem.dept,
+    severity: problem.severity,
+    reportedBy: problem.reportedByName,
+    managerEmails: managers.map(m=>m.username+'@3capp.local'),
+  });
+}
+
+async function notifyActionOverdue(action, ownerEmail){
+  await sendEmailNotification('action_overdue',{
+    actionTitle: action.title,
+    dueDate: action.dueDate,
+    ownerEmail,
+    problemId: action.problemRef||'',
+  });
+}
+
+// ══════════════════════════════════════════════
+// ENHANCED EXPORT
 // ══════════════════════════════════════════════
 async function renderAdmin(){
   if(!['admin','manager'].includes(currentUser.role)){
@@ -2039,15 +2467,111 @@ async function renderAdmin(){
       </div>
     </div>
     <div class="card mb-16">
+      <div class="card-header"><div class="card-title">Service Role Key</div>
+        <span class="pill ${localStorage.getItem('3c_service_key')?'pill-closed':'pill-new'} ml-auto">${localStorage.getItem('3c_service_key')?'Configured':'Not set'}</span>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-12">The service role key allows admins to create and delete users directly from the app. Find it in <strong>Supabase → Settings → API → service_role</strong>. It is stored only in your browser's localStorage and never sent anywhere except Supabase.</p>
+        <div class="field mb-12">
+          <label>Service Role Key</label>
+          <input id="svc-key" type="password" placeholder="eyJhbGci… (service_role key)" value="${localStorage.getItem('3c_service_key')||''}">
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-primary btn-sm" onclick="saveServiceKey()">Save Key</button>
+          ${localStorage.getItem('3c_service_key')?`<button class="btn btn-ghost btn-sm" onclick="clearServiceKey()">Clear Key</button>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-16">
       <div class="card-header"><div class="card-title">System Settings</div></div>
       <div class="card-body">
         <div class="form-row form-row-2 mb-12">
           <div class="field"><label>Problem Ageing Threshold (days)</label><input id="set-age" type="number" value="${localStorage.getItem('3c_set_age')||14}" placeholder="14"></div>
           <div class="field"><label>High Severity Containment SLA (hours)</label><input id="set-sla" type="number" value="${localStorage.getItem('3c_set_sla')||24}" placeholder="24"></div>
         </div>
+        <div class="form-row form-row-3 mb-12">
+          <div class="field"><label>Flag as Stale — New (days)</label><input id="set-stale-new" type="number" value="${localStorage.getItem('3c_stale_new')||3}" placeholder="3"></div>
+          <div class="field"><label>Flag as Stale — Cause Defined (days)</label><input id="set-stale-cause" type="number" value="${localStorage.getItem('3c_stale_cause')||5}" placeholder="5"></div>
+          <div class="field"><label>Flag as Stale — CM Defined (days)</label><input id="set-stale-cm" type="number" value="${localStorage.getItem('3c_stale_cm')||7}" placeholder="7"></div>
+        </div>
         <div class="flex justify-end"><button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Settings</button></div>
       </div>
     </div>
+
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">Microsoft Planner Integration</div>
+        <span class="pill ${getPlannerConfig().enabled?'pill-closed':'pill-new'} ml-auto">${getPlannerConfig().enabled?'Enabled':'Disabled'}</span>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-16">Push actions from 3C directly into a Microsoft Planner board. Requires a Microsoft 365 account and an access token from the Microsoft Graph API.</p>
+        <div class="form-row form-row-2 mb-12">
+          <div class="field">
+            <label>Access Token <span style="font-size:11px;color:var(--text3)">(from Microsoft Graph Explorer or your Azure app)</span></label>
+            <input id="pl-token" type="password" placeholder="eyJ0eXAi..." value="${getPlannerConfig().accessToken||''}">
+          </div>
+          <div class="field">
+            <label>Plan ID <span style="font-size:11px;color:var(--text3)">(from Planner URL)</span></label>
+            <input id="pl-planid" type="text" placeholder="AAMkADg..." value="${getPlannerConfig().planId||''}">
+          </div>
+        </div>
+        <div class="form-row form-row-2 mb-12">
+          <div class="field">
+            <label>Bucket ID <span style="font-size:11px;color:var(--text3)">(bucket where tasks are created)</span></label>
+            <input id="pl-bucketid" type="text" placeholder="IIAmAKo..." value="${getPlannerConfig().bucketId||''}">
+          </div>
+          <div class="field" style="display:flex;align-items:flex-end;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+              <input type="checkbox" id="pl-enabled" ${getPlannerConfig().enabled?'checked':''} style="width:16px;height:16px">
+              <span>Enable Planner sync</span>
+            </label>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r);padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px">
+          <strong>How to get your IDs:</strong><br>
+          1. Open Planner → your plan → copy the <code>planId</code> from the URL (after <code>/plannerV2/</code>)<br>
+          2. In Graph Explorer (<code>developer.microsoft.com/graph/graph-explorer</code>) run:<br>
+          <code>GET https://graph.microsoft.com/v1.0/planner/plans/{planId}/buckets</code><br>
+          3. Copy the bucket <code>id</code> you want tasks to go into<br>
+          4. For the access token: sign in to Graph Explorer → copy the token from the Access Token tab
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-primary btn-sm" onclick="savePlannerSettings()">Save Planner Config</button>
+          <button class="btn btn-ghost btn-sm" onclick="testPlannerConnection()">Test Connection</button>
+          <button class="btn btn-ghost btn-sm ml-auto" onclick="syncAllActionToPlanner()">↑ Sync All Open Actions</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-16">
+      <div class="card-header">
+        <div class="card-title">Email Notifications</div>
+        <span class="pill ${getEmailConfig().enabled?'pill-closed':'pill-new'} ml-auto">${getEmailConfig().enabled?'Enabled':'Disabled'}</span>
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-16">Send automatic email alerts via a webhook — works with <strong>Make.com</strong>, <strong>Zapier</strong>, <strong>n8n</strong>, or a custom Supabase Edge Function. The webhook receives a JSON payload which you can route to any email provider.</p>
+        <div class="field mb-12">
+          <label>Webhook URL <span style="font-size:11px;color:var(--text3)">(your Make/Zapier/n8n endpoint)</span></label>
+          <input id="em-webhook" type="url" placeholder="https://hook.eu1.make.com/abc123..." value="${esc(getEmailConfig().webhookUrl||'')}">
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r);padding:12px;font-size:12px;color:var(--text2);margin-bottom:12px">
+          <strong>Triggers:</strong> High severity problem logged → managers alerted · Action overdue → owner reminded · Problem stale → manager escalated<br>
+          <strong>Payload fields:</strong> <code>type</code>, <code>problemId</code>, <code>problemTitle</code>, <code>department</code>, <code>severity</code>, <code>appUrl</code>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="em-enabled" ${getEmailConfig().enabled?'checked':''} style="width:16px;height:16px">
+            <span>Enable email notifications</span>
+          </label>
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-primary btn-sm" onclick="saveEmailSettings()">Save Email Config</button>
+          <button class="btn btn-ghost btn-sm" onclick="testEmailWebhook()">Test Webhook</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header"><div class="card-title">All Problems</div></div>
       <div class="card-body-p0">${buildProblemTable(ps)}</div>
@@ -2058,7 +2582,150 @@ async function renderAdmin(){
 function saveSettings(){
   localStorage.setItem('3c_set_age',document.getElementById('set-age').value);
   localStorage.setItem('3c_set_sla',document.getElementById('set-sla').value);
+  // Update escalation thresholds
+  const staleNew = parseInt(document.getElementById('set-stale-new').value)||3;
+  const staleCause = parseInt(document.getElementById('set-stale-cause').value)||5;
+  const staleCM = parseInt(document.getElementById('set-stale-cm').value)||7;
+  localStorage.setItem('3c_stale_new', staleNew);
+  localStorage.setItem('3c_stale_cause', staleCause);
+  localStorage.setItem('3c_stale_cm', staleCM);
+  // Apply immediately
+  ESCALATION_DAYS.new = staleNew;
+  ESCALATION_DAYS['cause-defined'] = staleCause;
+  ESCALATION_DAYS['countermeasure-defined'] = staleCM;
   showNotif('Settings saved.','success');
+}
+
+function saveServiceKey(){
+  const key = document.getElementById('svc-key').value.trim();
+  if(!key){ showNotif('Enter the service role key.','error'); return; }
+  if(!key.startsWith('eyJ')){ showNotif('That doesn\'t look like a valid key — it should start with eyJ','error'); return; }
+  localStorage.setItem('3c_service_key', key);
+  showNotif('Service role key saved. User management is now fully enabled.','success');
+  renderAdmin();
+}
+
+function clearServiceKey(){
+  if(!confirm('Remove the service role key? User management will revert to manual SQL mode.')) return;
+  localStorage.removeItem('3c_service_key');
+  showNotif('Service role key removed.','success');
+  renderAdmin();
+}
+
+async function resetUserPassword(uid){
+  const pass = document.getElementById('rp-pass').value;
+  if(!pass||pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
+  const serviceKey = localStorage.getItem('3c_service_key');
+  if(!serviceKey){
+    closeModal();
+    showNotif('Add your service role key in Admin → Service Role Key first, then try again.','error');
+    return;
+  }
+  try {
+    const res = await fetch(`${SB_URL}/auth/v1/admin/users/${uid}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': 'Bearer ' + serviceKey
+      },
+      body: JSON.stringify({ password: pass })
+    });
+    if(!res.ok){ const e=await res.json().catch(()=>{}); throw new Error(e?.message||res.status); }
+    await dbPatch('profiles', {must_change_password:true}, 'id', uid);
+    await getUsers();
+    closeModal();
+    showNotif('Password reset. User will be prompted to change on next login.','success');
+    renderAdmin();
+  } catch(e){ showNotif('Reset failed: '+e.message,'error'); }
+}
+
+async function deleteUser(uid){
+  if(!confirm('Delete this user? Their reports will remain but be unassigned.')) return;
+  const serviceKey = localStorage.getItem('3c_service_key');
+  try {
+    // Always delete profile first
+    await dbDel('profiles','id',uid);
+    // Try to delete auth user if we have service key
+    if(serviceKey){
+      await fetch(`${SB_URL}/auth/v1/admin/users/${uid}`, {
+        method: 'DELETE',
+        headers: {'apikey': serviceKey, 'Authorization': 'Bearer '+serviceKey}
+      });
+    }
+    await getUsers();
+    showNotif(serviceKey?'User deleted.':'Profile deleted. Remove auth user in Supabase → Auth → Users.', serviceKey?'success':'warning');
+    renderAdmin();
+  } catch(e){ showNotif('Delete failed: '+e.message,'error'); }
+}
+
+function saveEmailSettings(){
+  const cfg = {
+    webhookUrl: document.getElementById('em-webhook').value.trim(),
+    enabled: document.getElementById('em-enabled').checked,
+  };
+  if(cfg.enabled && !cfg.webhookUrl){
+    showNotif('Enter a webhook URL before enabling.','error'); return;
+  }
+  saveEmailConfig(cfg);
+  showNotif('Email settings saved.','success');
+  renderAdmin();
+}
+
+async function testEmailWebhook(){
+  const url = document.getElementById('em-webhook').value.trim();
+  if(!url){ showNotif('Enter a webhook URL first.','error'); return; }
+  showNotif('Sending test…','');
+  try {
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        type:'test',
+        message:'3C Problem Solver webhook test',
+        appUrl: window.location.href,
+        timestamp: new Date().toISOString()
+      })
+    });
+    if(res.ok) showNotif('✓ Webhook responded successfully!','success');
+    else showNotif('Webhook returned '+res.status+' — check your endpoint.','error');
+  } catch(e){ showNotif('Webhook failed: '+e.message,'error'); }
+}
+
+function savePlannerSettings(){
+  const cfg = {
+    accessToken: document.getElementById('pl-token').value.trim(),
+    planId: document.getElementById('pl-planid').value.trim(),
+    bucketId: document.getElementById('pl-bucketid').value.trim(),
+    enabled: document.getElementById('pl-enabled').checked,
+  };
+  if(cfg.enabled && (!cfg.accessToken||!cfg.planId||!cfg.bucketId)){
+    showNotif('Fill in all fields before enabling.','error'); return;
+  }
+  savePlannerConfig(cfg);
+  showNotif('Planner settings saved.','success');
+  renderAdmin();
+}
+
+async function testPlannerConnection(){
+  const cfg = {
+    accessToken: document.getElementById('pl-token').value.trim(),
+    planId: document.getElementById('pl-planid').value.trim(),
+  };
+  if(!cfg.accessToken||!cfg.planId){showNotif('Enter access token and plan ID first.','error');return;}
+  showNotif('Testing connection…','');
+  try {
+    const res = await fetch(`https://graph.microsoft.com/v1.0/planner/plans/${cfg.planId}`,{
+      headers:{'Authorization':'Bearer '+cfg.accessToken}
+    });
+    if(res.ok){
+      const data=await res.json();
+      showNotif(`✓ Connected! Plan: "${data.title}"`, 'success');
+    } else {
+      const err=await res.json().catch(()=>({}));
+      showNotif('Connection failed: '+(err.error?.message||res.status),'error');
+    }
+  } catch(e){ showNotif('Connection error: '+e.message,'error'); }
 }
 
 function openAddUserModal(){
@@ -2096,10 +2763,86 @@ async function addUser(){
   const pass=document.getElementById('u-pass').value;
   if(!name||!username||!pass){showNotif('Name, username and password are required.','error');return;}
   if(pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
+  if(!/^[a-z0-9_]+$/.test(username)){showNotif('Username can only contain lowercase letters, numbers and underscores.','error');return;}
   const users=await getUsers();
   if(users.find(u=>u.username===username)){showNotif('Username already exists.','error');return;}
-  closeModal();
-  showNotif(`To add ${username}: Supabase → Auth → Users → Add user\nEmail: ${username}@3capp.local\nPassword: ${pass}\nThen run: INSERT INTO profiles... (see SETUP.md)`,'warning');
+
+  const serviceKey = localStorage.getItem('3c_service_key');
+  if(!serviceKey){
+    // No service key — show SQL instructions instead
+    closeModal();
+    document.getElementById('modal-title').textContent='Add User — SQL Method';
+    document.getElementById('modal-body').innerHTML=`
+      <p class="text-sm text-muted mb-12">To create users programmatically, add your Supabase Service Role key in <strong>Admin Panel → Service Role Key</strong>. Or run this SQL manually:</p>
+      <div style="background:var(--surface2);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;user-select:all">
+        -- Step 1: Run in Supabase SQL Editor<br>
+        SELECT create_user('${username}@3capp.local', '${pass}');<br><br>
+        -- If that doesn't work, use the Auth dashboard:<br>
+        -- Authentication → Users → Add user<br>
+        -- Email: ${username}@3capp.local<br>
+        -- Password: ${pass}<br><br>
+        -- Step 2: Then insert the profile<br>
+        INSERT INTO public.profiles (id, username, full_name, role, department, initials, must_change_password)<br>
+        SELECT id, '${username}', '${name}', '${role}', '${dept}',<br>
+        '${name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}', true<br>
+        FROM auth.users WHERE email = '${username}@3capp.local';
+      </div>`;
+    document.getElementById('modal-footer').innerHTML=`
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary btn-sm" onclick="copyUserSQL('${username}','${name}','${pass}','${role}','${dept}')">Copy SQL</button>`;
+    document.getElementById('modal-bg').classList.remove('hidden');
+    return;
+  }
+
+  // We have the service role key — create user via Supabase Admin API
+  const btn = document.querySelector('#modal .btn-primary');
+  if(btn){ btn.textContent='Creating…'; btn.disabled=true; }
+  try {
+    const email = `${username}@3capp.local`;
+    const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+    // 1. Create auth user
+    const authRes = await fetch(`${SB_URL}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': 'Bearer ' + serviceKey
+      },
+      body: JSON.stringify({
+        email, password: pass,
+        email_confirm: true,
+        user_metadata: { username, full_name: name }
+      })
+    });
+    if(!authRes.ok){
+      const err = await authRes.json().catch(()=>({}));
+      throw new Error(err.message || err.msg || 'Auth user creation failed ('+authRes.status+')');
+    }
+    const authData = await authRes.json();
+    const userId = authData.id || authData.user?.id;
+    if(!userId) throw new Error('No user ID returned from auth creation');
+
+    // 2. Create profile row
+    await dbPost('profiles', {
+      id: userId, username, full_name: name,
+      role, department: dept, initials, must_change_password: true
+    });
+
+    await getUsers(); // refresh cache
+    closeModal();
+    showNotif(`✓ User "${username}" created. They can log in with password: ${pass}`, 'success');
+    renderAdmin();
+  } catch(e){
+    if(btn){ btn.textContent='Add User'; btn.disabled=false; }
+    showNotif('Failed: '+e.message, 'error');
+  }
+}
+
+function copyUserSQL(username, name, pass, role, dept){
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const sql = `-- Run in Supabase SQL Editor\n-- Step 1: Create auth user via Dashboard: Authentication → Users → Add user\n-- Email: ${username}@3capp.local, Password: ${pass}\n\n-- Step 2: Insert profile (run after creating auth user)\nINSERT INTO public.profiles (id, username, full_name, role, department, initials, must_change_password)\nSELECT id, '${username}', '${name}', '${role}', '${dept}', '${initials}', true\nFROM auth.users WHERE email = '${username}@3capp.local';`;
+  navigator.clipboard.writeText(sql).then(()=>showNotif('SQL copied to clipboard.','success')).catch(()=>showNotif('Copy failed — select and copy manually.','error'));
 }
 
 async function openEditUserModal(uid){
@@ -2158,22 +2901,6 @@ async function openResetPwModal(uid){
   document.getElementById('modal-bg').classList.remove('hidden');
 }
 
-async function resetUserPassword(uid){
-  const pass=document.getElementById('rp-pass').value;
-  if(!pass||pass.length<6){showNotif('Password must be at least 6 characters.','error');return;}
-  closeModal();
-  showNotif(`Run in Supabase SQL Editor:\nUPDATE auth.users SET encrypted_password = crypt('${pass}', gen_salt('bf')) WHERE id = '${uid}';`,'warning');
-}
-
-async function deleteUser(uid){
-  if(!confirm('Delete this user? Their reports will remain.')) return;
-  try {
-    await dbDel('profiles','id',uid); await getUsers();
-    showNotif('Profile deleted. Remove auth user in Supabase → Auth → Users.','warning');
-    renderAdmin();
-  } catch(e){ showNotif('Delete failed: '+e.message,'error'); }
-}
-
 // ══════════════════════════════════════════════
 // PROFILE
 // ══════════════════════════════════════════════
@@ -2215,42 +2942,114 @@ async function renderProfile(){
 // ══════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════
+function openExportModal(){
+  const depts = [...new Set((_c.problems||[]).map(p=>p.dept).filter(Boolean))].sort();
+  document.getElementById('modal-title').textContent='Export Data';
+  document.getElementById('modal-body').innerHTML=`
+    <div class="form-row form-row-2 mb-12">
+      <div class="field"><label>Date From</label><input type="date" id="exp-from"></div>
+      <div class="field"><label>Date To</label><input type="date" id="exp-to" value="${new Date().toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="field mb-12"><label>Department (leave blank for all)</label>
+      <select id="exp-dept"><option value="">All Departments</option>
+        ${depts.map(d=>`<option>${esc(d)}</option>`).join('')}
+      </select></div>
+    <div class="field mb-12"><label>Status</label>
+      <select id="exp-status">
+        <option value="">All Statuses</option>
+        ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+      </select></div>
+    <div style="background:var(--surface2);border-radius:var(--r);padding:12px;font-size:12px;color:var(--text2)">
+      Exports include: Problems, Root Causes, Countermeasures, Actions, Sign-offs
+    </div>`;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="exportFilteredCSV()">⬇ Filtered CSV</button>`;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function exportFilteredCSV(){
+  let ps = await getProblems();
+  const from = document.getElementById('exp-from')?.value;
+  const to = document.getElementById('exp-to')?.value;
+  const dept = document.getElementById('exp-dept')?.value;
+  const status = document.getElementById('exp-status')?.value;
+
+  if(from) ps = ps.filter(p=>new Date(p.created)>=new Date(from));
+  if(to) ps = ps.filter(p=>new Date(p.created)<=new Date(to+'T23:59:59'));
+  if(dept) ps = ps.filter(p=>p.dept===dept);
+  if(status) ps = ps.filter(p=>p.status===status);
+
+  closeModal();
+  await exportCSVData(ps, `3c_export_filtered_${new Date().toISOString().split('T')[0]}.csv`);
+  showNotif(`Exported ${ps.length} problems.`, 'success');
+}
+
 async function exportCSV(){
-  const ps=await getProblems();
-  const headers=['ID','Title','Department','Process','Category','Severity','Status','Reporter','Created','Closed','Days Open','Root Cause','Countermeasure','CM Status'];
-  const rows=ps.map(p=>{
-    const daysOpen=p.status==='closed'&&p.closedDate
-      ?Math.floor((p.closedDate-p.created)/86400000)
-      :Math.floor((Date.now()-p.created)/86400000);
-    const csvCell=v=>'"'+(String(v||'').replace(/"/g,'""'))+'"';
+  const ps = await getProblems();
+  await exportCSVData(ps, `3c_problems_${new Date().toISOString().split('T')[0]}.csv`);
+  showNotif('CSV exported — check your downloads.','success');
+}
+
+async function exportCSVData(ps, filename){
+  const actions = await getActions();
+  // Problems sheet
+  const headers=['ID','Title','Department','Process','Category','Severity','Status','Reporter',
+    'Created','Closed','Days Open','Root Cause','Cause Type','Analysis Tool','Evidence',
+    'Countermeasure','CM Type','CM Owner','CM Due Date','CM Status',
+    'Action Count','Actions Complete','Sign-offs','Comments Count'];
+  const csvCell=v=>'"'+(String(v||'').replace(/"/g,'""'))+'"';
+  const rows = ps.map(p=>{
+    const pActions = actions.filter(a=>a.problemId===p.id);
+    const actComplete = pActions.filter(a=>a.status==='complete').length;
+    const daysOpen = p.status==='closed'&&p.closedDate
+      ? Math.floor((p.closedDate-p.created)/86400000)
+      : Math.floor((Date.now()-p.created)/86400000);
+    const ownerName = (_c.users||[]).find(u=>u.id===(p.countermeasure||{}).owner)?.name||'';
     return[
-      p.problemId,
-      csvCell(p.title),
-      csvCell(p.dept),
-      csvCell(p.process),
-      p.category,
-      p.severity,
-      STATUS_LABELS[p.status],
-      csvCell(p.reportedByName),
+      p.problemId, csvCell(p.title), csvCell(p.dept), csvCell(p.process),
+      p.category, p.severity, STATUS_LABELS[p.status], csvCell(p.reportedByName),
       new Date(p.created).toLocaleDateString('en-IE'),
       p.closedDate?new Date(p.closedDate).toLocaleDateString('en-IE'):'',
       daysOpen,
-      csvCell((p.cause||{}).description),
-      csvCell((p.countermeasure||{}).description),
+      csvCell((p.cause||{}).description), csvCell((p.cause||{}).type),
+      csvCell((p.cause||{}).tools), csvCell((p.cause||{}).evidence),
+      csvCell((p.countermeasure||{}).description), csvCell((p.countermeasure||{}).type),
+      csvCell(ownerName), (p.countermeasure||{}).dueDate||'',
       csvCell((p.countermeasure||{}).status),
+      pActions.length, actComplete,
+      (p.signoffs||[]).map(s=>s.name).join('; '),
+      (p.comments||[]).length,
     ].join(',');
   });
-  const bom='\uFEFF'; // UTF-8 BOM for Excel compatibility
-  const csv=bom+[headers.map(h=>'"'+h+'"').join(','),...rows].join('\r\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='3c_problems_'+new Date().toISOString().split('T')[0]+'.csv';
-  document.body.appendChild(a);
-  a.click();
+
+  // Actions sheet appended after blank row
+  const actHeaders=['\n\nACTIONS','Problem ID','Title','Owner','Due Date','Status','Completed'];
+  const actRows = actions.map(a=>{
+    const prob = ps.find(p=>p.id===a.problemId);
+    const ownerName = (_c.users||[]).find(u=>u.id===a.owner)?.name||'';
+    return[
+      '', prob?.problemId||'', csvCell(a.title), csvCell(ownerName),
+      a.dueDate||'', a.status,
+      a.completedDate?new Date(a.completedDate).toLocaleDateString('en-IE'):'',
+    ].join(',');
+  });
+
+  const bom='\uFEFF';
+  const csv = bom + [
+    headers.map(h=>'"'+h+'"').join(','),
+    ...rows,
+    actHeaders.join(','),
+    ...actRows
+  ].join('\r\n');
+
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
-  showNotif('CSV exported — check your downloads.','success');
 }
 
 async function exportPDF(){
@@ -2978,13 +3777,524 @@ async function saveMyPassword(){
   catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
+// ══════════════════════════════════════════════
+// COMMENTS
+// ══════════════════════════════════════════════
+async function addComment(problemId){
+  const text = document.getElementById('comment-input')?.value.trim();
+  if(!text){ showNotif('Please enter a comment.','error'); return; }
+  const p = await getProblemWithDetails(problemId);
+  if(!p) return;
+  const comments = p.comments||[];
+  comments.push({
+    userId: currentUser.id,
+    name: currentUser.name,
+    initials: currentUser.initials,
+    role: currentUser.role,
+    text,
+    ts: Date.now()
+  });
+  try {
+    await dbPatch('problems',{comments: JSON.stringify(comments)},'id',problemId);
+    await addAuditEntry(problemId, `Comment added by ${currentUser.name}`);
+    showNotif('Comment posted.','success');
+    window._activeDetailTab='tab-comments';
+    renderDetail();
+  } catch(e){ showNotif('Failed: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// SIGN-OFF
+// ══════════════════════════════════════════════
+async function addSignoff(problemId){
+  const comment = document.getElementById('signoff-comment')?.value.trim()||'';
+  const p = await getProblemWithDetails(problemId);
+  if(!p) return;
+  const signoffs = p.signoffs||[];
+  if(signoffs.find(s=>s.userId===currentUser.id)){
+    showNotif('You have already signed off this problem.','error'); return;
+  }
+  signoffs.push({
+    userId: currentUser.id,
+    name: currentUser.name,
+    role: currentUser.role,
+    comment,
+    ts: Date.now()
+  });
+  try {
+    await dbPatch('problems',{signoffs: JSON.stringify(signoffs)},'id',problemId);
+    await addAuditEntry(problemId,`Signed off by ${currentUser.name} (${currentUser.role})`);
+    showNotif('Sign-off added. ✓','success');
+    window._activeDetailTab='tab-signoff';
+    renderDetail();
+  } catch(e){ showNotif('Sign-off failed: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
+// A3 PDF PRINT REPORT
+// ══════════════════════════════════════════════
+async function printA3Report(problemId){
+  showNotif('Preparing A3 report…','');
+  const p = await getProblemWithDetails(problemId);
+  if(!p){ showNotif('Could not load problem.','error'); return; }
+  const actions = await getActions(problemId);
+
+  const photoHtml = (photos, label) => photos.length
+    ? `<div style="margin-top:6px"><strong style="font-size:10px;text-transform:uppercase;color:#666">${label}</strong>
+       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+         ${photos.map(src=>`<img src="${src}" style="width:80px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #ddd">`).join('')}
+       </div></div>` : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>3C Report — ${p.problemId}</title>
+  <style>
+    @page { size: A3 landscape; margin: 12mm; }
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { font-size: 11px; color: #1a1d23; background: #fff; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid #1a5fb4; }
+    .header-left h1 { color:#1a5fb4; }
+    .meta { font-size:10px; color:#666; }
+    .pills { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+    .pill { padding:2px 8px; border-radius:99px; font-size:10px; font-weight:600; }
+    .pill-high{background:#fdecea;color:#c0392b;} .pill-medium{background:#fef3c7;color:#b45309;} .pill-low{background:#dcfce7;color:#166534;}
+    .pill-new{background:#dbeafe;color:#1e40af;} .pill-cause{background:#fef3c7;color:#b45309;}
+    .pill-counter{background:#dcfce7;color:#166534;} .pill-closed{background:#f3f4f6;color:#374151;}
+    .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+    .box { border:1px solid #dde1e7; border-radius:6px; padding:8px; }
+    .box h2 { font-size:12px; font-weight:700; margin:0 0 6px; display:flex; align-items:center; gap:6px; }
+    .c1 h2{color:#1a5fb4;} .c2 h2{color:#b45309;} .c3 h2{color:#166534;}
+    .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;color:#fff;}
+    .badge-c1{background:#1a5fb4;} .badge-c2{background:#b45309;} .badge-c3{background:#166534;}
+    .label { font-size:9px; text-transform:uppercase; color:#888; font-weight:600; margin-bottom:2px; }
+    .val { font-size:11px; margin-bottom:6px; }
+    .actions-table { width:100%; border-collapse:collapse; font-size:10px; }
+    .actions-table th { background:#f4f5f7; padding:4px 6px; text-align:left; font-weight:600; }
+    .actions-table td { padding:4px 6px; border-bottom:1px solid #eee; }
+    .signoffs { display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+    .signoff-box { border:1px solid #dcfce7; background:#f0fdf4; border-radius:4px; padding:5px 8px; }
+    .footer { margin-top:8px; padding-top:6px; border-top:1px solid #eee; display:flex; justify-content:space-between; font-size:9px; color:#aaa; }
+    .progress-bar { background:#e5e7eb; border-radius:99px; height:6px; width:100%; margin-top:4px; }
+    .progress-fill { background:#1a5fb4; border-radius:99px; height:6px; }
+  </style></head><body>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>3C Problem Solving Report</h1>
+      <div class="pills">
+        <span class="pill ${sevClass(p.severity)}">${p.severity} Severity</span>
+        <span class="pill pill-${p.status}">${STATUS_LABELS[p.status]}</span>
+        <span class="pill" style="background:#f0f2f5;color:#374151">${esc(p.category||'')}</span>
+        <span class="pill" style="background:#f0f2f5;color:#374151">${esc(p.dept||'')}${p.process?' · '+esc(p.process):''}</span>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:700;color:#1a5fb4;font-family:monospace">${p.problemId}</div>
+      <div class="meta">Reported by: ${esc(p.reportedByName||'')} · ${new Date(p.created).toLocaleDateString('en-IE')}</div>
+      <div class="meta">Printed: ${new Date().toLocaleDateString('en-IE',{day:'2-digit',month:'short',year:'numeric'})}</div>
+      <div style="margin-top:4px">
+        <div style="font-size:9px;color:#888">Completion</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${calcProblemCompletion(p)}%"></div></div>
+        <div style="font-size:10px;font-weight:600;color:#1a5fb4;text-align:right">${calcProblemCompletion(p)}%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="box c1">
+      <h2><span class="badge badge-c1">C1</span> Concern</h2>
+      <div class="label">Problem Statement</div>
+      <div class="val" style="font-weight:600;font-size:12px">${esc(p.title||'')}</div>
+      <div class="label">Description</div>
+      <div class="val">${esc(p.description||'—')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><div class="label">Impact</div><div class="val">${esc(p.impact||'—')}</div></div>
+        <div><div class="label">Frequency</div><div class="val">${esc(p.frequency||'—')}</div></div>
+      </div>
+      ${p.firstSeen?`<div class="label">First Seen</div><div class="val">${p.firstSeen}</div>`:''}
+      ${photoHtml(p.concernPhotos||[],'Concern Photos')}
+    </div>
+
+    <div class="box c2">
+      <h2><span class="badge badge-c2">C2</span> Cause</h2>
+      <div class="label">Root Cause</div>
+      <div class="val">${esc((p.cause||{}).description||'—')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><div class="label">Cause Type (6M)</div><div class="val">${esc((p.cause||{}).type||'—')}</div></div>
+        <div><div class="label">Analysis Tool</div><div class="val">${esc((p.cause||{}).tools||'—')}</div></div>
+      </div>
+      <div class="label">Evidence</div>
+      <div class="val">${esc((p.cause||{}).evidence||'—')}</div>
+      ${photoHtml(p.causePhotos||[],'Evidence Photos')}
+      ${photoHtml(p.causeStaffPhotos||[],'Staff Using CI Tools')}
+    </div>
+
+    <div class="box c3">
+      <h2><span class="badge badge-c3">C3</span> Countermeasure</h2>
+      <div class="label">Countermeasure</div>
+      <div class="val">${esc((p.countermeasure||{}).description||'—')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><div class="label">Type</div><div class="val">${esc((p.countermeasure||{}).type||'—')}</div></div>
+        <div><div class="label">Status</div><div class="val">${esc((p.countermeasure||{}).status||'—')}</div></div>
+      </div>
+      <div class="label">Owner</div>
+      <div class="val">${esc((_c.users||[]).find(u=>u.id===(p.countermeasure||{}).owner)?.name||(p.countermeasure||{}).owner||'—')}</div>
+      <div class="label">Due Date</div>
+      <div class="val">${(p.countermeasure||{}).dueDate||'—'}</div>
+      ${photoHtml(p.countermeasurePhotos||[],'Evidence Photos')}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="box">
+      <h2>Actions (${actions.length})</h2>
+      ${actions.length===0?'<div style="color:#aaa;font-size:10px">No actions.</div>':
+        `<table class="actions-table">
+          <thead><tr><th>Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>${actions.map(a=>`<tr>
+            <td>${esc(a.title)}</td>
+            <td>${esc((_c.users||[]).find(u=>u.id===a.owner)?.name||a.ownerName||'—')}</td>
+            <td>${a.dueDate||'—'}</td>
+            <td style="font-weight:600;color:${a.status==='complete'?'#166534':isActionOverdue(a)?'#c0392b':'#374151'}">${a.status==='complete'?'✓ Done':isActionOverdue(a)?'⚠ Overdue':a.status}</td>
+          </tr>`).join('')}</tbody>
+        </table>`}
+    </div>
+    <div class="box">
+      <h2>Sign-offs & Approvals</h2>
+      ${(p.signoffs||[]).length===0?'<div style="color:#aaa;font-size:10px">No sign-offs yet.</div>':
+        `<div class="signoffs">${(p.signoffs||[]).map(s=>`
+          <div class="signoff-box">
+            <div style="font-weight:600;font-size:11px">✅ ${esc(s.name)}</div>
+            <div style="font-size:9px;color:#666">${esc(s.role)} · ${new Date(s.ts).toLocaleDateString('en-IE')}</div>
+            ${s.comment?`<div style="font-size:10px;color:#374151;margin-top:2px">${esc(s.comment)}</div>`:''}
+          </div>`).join('')}
+        </div>`}
+      <div style="margin-top:12px">
+        <div class="label">Audit Summary</div>
+        ${(p.audit||[]).slice(0,5).map(a=>`<div style="font-size:10px;color:#555;padding:2px 0">${esc(a.by)} — ${esc(a.action)} (${new Date(a.ts).toLocaleDateString('en-IE')})</div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>3C Problem Solver · ${esc(p.dept||'')} · Generated ${new Date().toLocaleString('en-IE')}</span>
+    <span>${p.problemId} · ${esc(p.title||'')}</span>
+  </div>
+
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  if(w){ w.document.write(html); w.document.close(); }
+  else showNotif('Pop-up blocked — allow pop-ups and try again.','error');
+}
+
+// ══════════════════════════════════════════════
+// QR CODE
+// ══════════════════════════════════════════════
+function showQRCode(problemId, problemRef){
+  const url = window.location.href.split('?')[0] + '?open=' + problemId;
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
+  document.getElementById('modal-title').textContent = 'QR Code — ' + problemRef;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center;padding:1rem">
+      <img src="${qrUrl}" style="width:200px;height:200px;border:1px solid var(--border);border-radius:var(--r)" alt="QR Code">
+      <div style="font-size:12px;color:var(--text2);margin-top:12px;word-break:break-all">${url}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px">Scan to open this problem directly on any device</div>
+    </div>`;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    <button class="btn btn-primary btn-sm" onclick="printQRLabel('${problemId}','${problemRef}')">🖨 Print Label</button>`;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+function printQRLabel(problemId, problemRef){
+  const url = window.location.href.split('?')[0] + '?open=' + problemId;
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
+  const s = 'script';
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @page{size:100mm 60mm;margin:4mm}
+    body{font-family:Arial,sans-serif;display:flex;align-items:center;gap:8px;padding:4mm}
+    img{width:52mm;height:52mm}
+    .info{flex:1}
+    h2{font-size:14px;margin:0 0 4px;color:#1a5fb4}
+    p{font-size:9px;color:#555;margin:2px 0}
+    .logo{font-size:10px;font-weight:700;color:#1a5fb4;margin-bottom:6px}
+  </style></head><body>
+  <img src="${qrUrl}" alt="QR">
+  <div class="info">
+    <div class="logo">3C Problem Solver</div>
+    <h2>${problemRef}</h2>
+    <p>Scan to log or view this problem</p>
+    <p style="font-size:8px;color:#999;margin-top:8px">${url}</p>
+  </div>
+  <${s}>window.onload=()=>{window.print();}</${s}>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else showNotif('Pop-up blocked.','error');
+}
+
+// Handle ?open= URL param to deep-link to a problem
+window.addEventListener('load', ()=>{
+  const params = new URLSearchParams(window.location.search);
+  const openId = params.get('open');
+  if(openId) window._pendingOpenId = openId;
+});
+
+// ══════════════════════════════════════════════
+// RECURRING PROBLEM DETECTION
+// ══════════════════════════════════════════════
+function detectRecurringProblems(ps){
+  const window30 = Date.now() - 30*24*60*60*1000;
+  const recent = ps.filter(p=>p.created >= window30);
+  const counts = {};
+  recent.forEach(p=>{
+    const key = (p.dept||'')+'|'+(p.category||'');
+    if(!counts[key]) counts[key]={dept:p.dept,category:p.category,count:0,problems:[]};
+    counts[key].count++;
+    counts[key].problems.push(p);
+  });
+  return Object.values(counts).filter(x=>x.count>=3).sort((a,b)=>b.count-a.count);
+}
+
+// ══════════════════════════════════════════════
+// TV MODE
+// ══════════════════════════════════════════════
+let _tvInterval = null;
+
+async function renderTVMode(){
+  const ps = await getProblems();
+  const actions = await getActions();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const open = ps.filter(p=>p.status!=='closed');
+  const high = open.filter(p=>p.severity==='High');
+  const overdue = actions.filter(a=>isActionOverdue(a));
+  const closed7 = ps.filter(p=>p.status==='closed'&&p.closedDate&&(Date.now()-p.closedDate)<7*86400000);
+  const stale = open.filter(p=>isProblemStale(p));
+  const now = new Date().toLocaleString('en-IE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
+
+  document.getElementById('tv-content').innerHTML = `
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="background:#1a5fb4;color:#fff;font-weight:700;font-size:18px;padding:6px 12px;border-radius:8px">3C</div>
+        <div>
+          <div style="font-size:22px;font-weight:600">Problem Solver — Live Dashboard</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.5)">${now}</div>
+        </div>
+      </div>
+      <button onclick="exitTVMode()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px">✕ Exit TV Mode</button>
+    </div>
+
+    <!-- KPI Strip -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem">
+      ${[
+        {label:'Open Problems', val:open.length, color:'#3b82f6'},
+        {label:'High Severity', val:high.length, color:high.length?'#ef4444':'#22c55e'},
+        {label:'Overdue Actions', val:overdue.length, color:overdue.length?'#ef4444':'#22c55e'},
+        {label:'Stale Problems', val:stale.length, color:stale.length?'#f59e0b':'#22c55e'},
+        {label:'Closed This Week', val:closed7.length, color:'#22c55e'},
+      ].map(k=>`
+        <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:1.25rem;text-align:center;border:1px solid rgba(255,255,255,.08)">
+          <div style="font-size:42px;font-weight:700;color:${k.color};font-family:var(--mono)">${k.val}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.05em;margin-top:4px">${k.label}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Problems & Actions split -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;flex:1;min-height:0">
+
+      <!-- Open Problems -->
+      <div style="background:rgba(255,255,255,.03);border-radius:12px;border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;flex-direction:column">
+        <div style="padding:.75rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);font-weight:600;font-size:14px;display:flex;justify-content:space-between">
+          <span>Open Problems</span><span style="color:rgba(255,255,255,.4);font-size:12px">${open.length} total</span>
+        </div>
+        <div style="overflow-y:auto;flex:1">
+          ${open.length===0?'<div style="padding:1rem;color:rgba(255,255,255,.3);font-size:13px">No open problems 🎉</div>':
+            open.slice(0,12).map(p=>{
+              const isStale=isProblemStale(p);
+              const bg=p.severity==='High'?'rgba(239,68,68,.08)':isStale?'rgba(245,158,11,.06)':'transparent';
+              const dot=p.severity==='High'?'#ef4444':p.severity==='Medium'?'#f59e0b':'#22c55e';
+              return`<div style="display:flex;align-items:center;gap:10px;padding:.6rem 1rem;border-bottom:1px solid rgba(255,255,255,.04);background:${bg}">
+                <div style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></div>
+                <div style="font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.4);min-width:72px">${p.problemId}</div>
+                <div style="flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.title)}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.3)">${esc(p.dept||'')}</div>
+                ${isStale?'<div style="font-size:10px;background:#f59e0b22;color:#f59e0b;padding:2px 6px;border-radius:4px">STALE</div>':''}
+              </div>`;
+            }).join('')}
+        </div>
+      </div>
+
+      <!-- Overdue Actions -->
+      <div style="background:rgba(255,255,255,.03);border-radius:12px;border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;flex-direction:column">
+        <div style="padding:.75rem 1rem;border-bottom:1px solid rgba(255,255,255,.08);font-weight:600;font-size:14px;display:flex;justify-content:space-between">
+          <span>Overdue Actions</span><span style="color:rgba(255,255,255,.4);font-size:12px">${overdue.length} overdue</span>
+        </div>
+        <div style="overflow-y:auto;flex:1">
+          ${overdue.length===0?'<div style="padding:1rem;color:rgba(255,255,255,.3);font-size:13px">No overdue actions 🎉</div>':
+            overdue.slice(0,12).map(a=>{
+              const daysOver=Math.floor((Date.now()-new Date(a.dueDate))/86400000);
+              const owner=(_c.users||[]).find(u=>u.id===a.owner);
+              return`<div style="display:flex;align-items:center;gap:10px;padding:.6rem 1rem;border-bottom:1px solid rgba(255,255,255,.04)">
+                <div style="background:#ef444422;color:#ef4444;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;min-width:36px;text-align:center">${daysOver}d</div>
+                <div style="flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.title)}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.4)">${owner?esc(owner.name):''}</div>
+              </div>`;
+            }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer ticker -->
+    <div style="font-size:11px;color:rgba(255,255,255,.3);text-align:center">
+      Auto-refreshes every 60 seconds · ${ps.length} total problems · ${actions.filter(a=>a.status==='complete').length}/${actions.length} actions complete
+    </div>
+  `;
+}
+
+function enterTVMode(){
+  document.getElementById('tv-mode').style.display='block';
+  renderTVMode();
+  _tvInterval = setInterval(renderTVMode, 60000);
+}
+
+function exitTVMode(){
+  document.getElementById('tv-mode').style.display='none';
+  if(_tvInterval){ clearInterval(_tvInterval); _tvInterval=null; }
+}
+
+// Check for ?tv=1 on page load
+window.addEventListener('load', ()=>{
+  if(new URLSearchParams(window.location.search).get('tv')==='1'){
+    // Enter TV mode after login
+    window._pendingTVMode = true;
+  }
+});
+
+// ══════════════════════════════════════════════
+// TREND CHARTS (SVG-based, no library needed)
+// ══════════════════════════════════════════════
+function buildTrendData(ps, months=6){
+  const now = new Date();
+  const buckets = [];
+  for(let i=months-1;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const key = d.toLocaleDateString('en-IE',{month:'short',year:'2-digit'});
+    buckets.push({key, created:0, closed:0, month:d.getMonth(), year:d.getFullYear()});
+  }
+  ps.forEach(p=>{
+    const cd = new Date(p.created);
+    const b = buckets.find(b=>b.month===cd.getMonth()&&b.year===cd.getFullYear());
+    if(b) b.created++;
+    if(p.closedDate){
+      const cl = new Date(p.closedDate);
+      const bc = buckets.find(b=>b.month===cl.getMonth()&&b.year===cl.getFullYear());
+      if(bc) bc.closed++;
+    }
+  });
+  return buckets;
+}
+
+function buildSVGLineChart(data, series, opts={}){
+  const W=opts.width||500, H=opts.height||160, pad={t:16,r:16,b:32,l:32};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const allVals = series.flatMap(s=>data.map(d=>d[s.key]||0));
+  const maxV = Math.max(...allVals, 1);
+  const xStep = cW/(data.length-1||1);
+
+  const colors = ['#1a5fb4','#22c55e','#f59e0b','#ef4444'];
+  let paths='', dots='', legend='';
+
+  series.forEach((s,si)=>{
+    const col=s.color||colors[si];
+    const pts=data.map((d,i)=>({
+      x:pad.l+i*xStep,
+      y:pad.t+cH-(((d[s.key]||0)/maxV)*cH)
+    }));
+    // Smooth line
+    let d='M'+pts[0].x+','+pts[0].y;
+    for(let i=1;i<pts.length;i++){
+      const mx=(pts[i-1].x+pts[i].x)/2;
+      d+=` C${mx},${pts[i-1].y} ${mx},${pts[i].y} ${pts[i].x},${pts[i].y}`;
+    }
+    paths+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
+    // Area fill
+    let af='M'+pts[0].x+','+(pad.t+cH)+' L'+pts[0].x+','+pts[0].y;
+    for(let i=1;i<pts.length;i++){
+      const mx=(pts[i-1].x+pts[i].x)/2;
+      af+=` C${mx},${pts[i-1].y} ${mx},${pts[i].y} ${pts[i].x},${pts[i].y}`;
+    }
+    af+=` L${pts[pts.length-1].x},${pad.t+cH} Z`;
+    paths+=`<path d="${af}" fill="${col}" opacity="0.06"/>`;
+    // Dots + values
+    pts.forEach((pt,i)=>{
+      const v=data[i][s.key]||0;
+      dots+=`<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="${col}" stroke="#fff" stroke-width="1.5"/>`;
+      if(v>0) dots+=`<text x="${pt.x}" y="${pt.y-8}" text-anchor="middle" font-size="10" fill="${col}" font-weight="600">${v}</text>`;
+    });
+    legend+=`<div style="display:flex;align-items:center;gap:5px;font-size:12px"><span style="width:12px;height:3px;background:${col};border-radius:2px;display:inline-block"></span>${s.label}</div>`;
+  });
+
+  // X labels
+  let xlabels='';
+  data.forEach((d,i)=>{
+    xlabels+=`<text x="${pad.l+i*xStep}" y="${H-6}" text-anchor="middle" font-size="10" fill="#9aa0b0">${d.key}</text>`;
+  });
+  // Y grid
+  let ygrid='';
+  [0,.25,.5,.75,1].forEach(t=>{
+    const y=pad.t+cH*(1-t);
+    const v=Math.round(maxV*t);
+    ygrid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eee" stroke-dasharray="2,4"/>`;
+    if(v>0) ygrid+=`<text x="${pad.l-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#9aa0b0">${v}</text>`;
+  });
+
+  return `<div>
+    <svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">${ygrid}${paths}${dots}${xlabels}</svg>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:4px">${legend}</div>
+  </div>`;
+}
+
+function buildSVGBarChart(data, key, opts={}){
+  const W=opts.width||500, H=opts.height||120, pad={t:16,r:16,b:28,l:32};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const vals=data.map(d=>d[key]||0);
+  const maxV=Math.max(...vals,1);
+  const bW=Math.max(8,(cW/data.length)-6);
+  const col=opts.color||'#1a5fb4';
+  let bars='',xlabels='';
+  data.forEach((d,i)=>{
+    const x=pad.l+(cW/data.length)*i+(cW/data.length-bW)/2;
+    const bH=Math.max(2,((d[key]||0)/maxV)*cH);
+    const y=pad.t+cH-bH;
+    bars+=`<rect x="${x}" y="${y}" width="${bW}" height="${bH}" rx="3" fill="${col}" opacity="0.85"/>`;
+    if(d[key]>0) bars+=`<text x="${x+bW/2}" y="${y-3}" text-anchor="middle" font-size="10" fill="${col}" font-weight="600">${d[key]}</text>`;
+    xlabels+=`<text x="${x+bW/2}" y="${H-4}" text-anchor="middle" font-size="9" fill="#9aa0b0">${d.key}</text>`;
+  });
+  let ygrid='';
+  [0,.5,1].forEach(t=>{
+    const y=pad.t+cH*(1-t);
+    ygrid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eee" stroke-dasharray="2,4"/>`;
+  });
+  return `<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">${ygrid}${bars}${xlabels}</svg>`;
+}
+
 function showNotif(msg,type=''){
   const n=document.getElementById('notif');
   n.textContent=msg; n.className='notif show'+(type?' '+type:'');
-  clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove('show'),3000);
+  clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove('show'), msg.length>60?6000:3000);
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
+<!-- TV MODE OVERLAY -->
+<div id="tv-mode" style="display:none;position:fixed;inset:0;background:#0f1117;color:#fff;z-index:9999;font-family:var(--sans);overflow:hidden">
+  <div id="tv-content" style="height:100%;display:flex;flex-direction:column;padding:1.5rem;gap:1rem"></div>
+</div>
+
 </body>
 </html>
