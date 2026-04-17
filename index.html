@@ -2728,9 +2728,14 @@ async function testPlannerConnection(){
   } catch(e){ showNotif('Connection error: '+e.message,'error'); }
 }
 
-function openAddUserModal(){
+async function openAddUserModal(){
+  const depts = await getStoredDepts();
+  const serviceKey = localStorage.getItem('3c_service_key');
   document.getElementById('modal-title').textContent='Add New User';
   document.getElementById('modal-body').innerHTML=`
+    ${!serviceKey?`<div style="background:var(--amber-bg);border:1px solid #fde68a;border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:12px">
+      ⚠ Service Role Key not set — user will be created via SQL instructions. <a href="#" onclick="closeModal();goTo('admin')" style="color:var(--amber);font-weight:600">Set it in Admin Panel</a> to enable one-click user creation.
+    </div>`:''}
     <div class="form-row form-row-2 mb-12">
       <div class="field"><label>Full Name *</label><input id="u-name" type="text" placeholder="e.g. Sean Flynn"></div>
       <div class="field"><label>Username * <span style="font-size:11px;color:var(--text3)">(e.g. sflynn)</span></label><input id="u-uname" type="text" placeholder="sflynn" style="text-transform:lowercase" oninput="this.value=this.value.toLowerCase()"></div>
@@ -2742,15 +2747,18 @@ function openAddUserModal(){
         </select></div>
       <div class="field"><label>Department</label>
         <select id="u-dept">
-          ${getStoredDepts().map(d=>`<option>${d}</option>`).join('')}
+          ${depts.map(d=>`<option>${esc(d)}</option>`).join('')}
         </select></div>
     </div>
-    <div class="field"><label>Temporary Password *</label><input id="u-pass" type="text" placeholder="User will be prompted to change on first login"></div>
+    <div class="field"><label>Temporary Password *</label>
+      <input id="u-pass" type="text" placeholder="Min. 6 characters — user changes on first login"></div>
     <div style="font-size:12px;color:var(--text3);margin-top:6px;">User will be required to change this password on first login.</div>
   `;
   document.getElementById('modal-footer').innerHTML=`
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="addUser()">Add User</button>
+    <button class="btn btn-primary" id="add-user-btn" onclick="addUser()">
+      ${serviceKey?'Create User':'Get SQL →'}
+    </button>
   `;
   document.getElementById('modal-bg').classList.remove('hidden');
 }
@@ -2795,7 +2803,7 @@ async function addUser(){
   }
 
   // We have the service role key — create user via Supabase Admin API
-  const btn = document.querySelector('#modal .btn-primary');
+  const btn = document.getElementById('add-user-btn');
   if(btn){ btn.textContent='Creating…'; btn.disabled=true; }
   try {
     const email = `${username}@3capp.local`;
