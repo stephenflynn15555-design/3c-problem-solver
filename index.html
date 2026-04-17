@@ -984,6 +984,8 @@ async function addDetailPhoto(section, src) {
     if (!window._detailPhotoCache) window._detailPhotoCache = {};
     if (!window._detailPhotoCache[section]) window._detailPhotoCache[section] = [];
     window._detailPhotoCache[section].push(publicUrl);
+    // Update completion bar
+    refreshCompletionBar();
   }
 }
 
@@ -1641,6 +1643,41 @@ function calcProblemCompletion(p){
   return Math.round(score/max*100);
 }
 
+function getMissingItems(p){
+  const missing = [];
+  if(!p.description) missing.push('description');
+  if(!p.cause?.description) missing.push('root cause');
+  if(!p.cause?.type) missing.push('cause type');
+  if(!p.cause?.tools) missing.push('analysis tool');
+  if(!p.countermeasure?.description) missing.push('countermeasure');
+  if(!p.countermeasure?.owner) missing.push('CM owner');
+  if(!p.countermeasure?.dueDate) missing.push('CM due date');
+  const hasPhoto = (p.causePhotos||[]).length||(p.countermeasurePhotos||[]).length||(p.concernPhotos||[]).length;
+  if(!hasPhoto) missing.push('evidence photo');
+  if(!(p.causeStaffPhotos||[]).length) missing.push('staff CI tools photo');
+  if(!missing.length) return '';
+  return '— missing: '+missing.slice(0,3).join(', ')+(missing.length>3?' +'+( missing.length-3)+' more':'');
+}
+
+async function refreshCompletionBar(){
+  if(!currentDetailId) return;
+  try {
+    const p = await getProblemWithDetails(currentDetailId);
+    if(!p) return;
+    const pct = calcProblemCompletion(p);
+    const bar = document.getElementById('detail-pct-bar');
+    const val = document.getElementById('detail-pct-val');
+    const hint = document.getElementById('detail-pct-hint');
+    if(bar) bar.style.width = pct+'%';
+    if(val) val.textContent = pct+'%';
+    if(hint){
+      const missing = getMissingItems(p);
+      hint.textContent = missing || '✓ All complete';
+      hint.style.color = missing ? 'var(--amber)' : 'var(--green)';
+    }
+  } catch(e){}
+}
+
 // ══════════════════════════════════════════════
 // PROBLEM DETAIL (3C)
 // ══════════════════════════════════════════════
@@ -1692,10 +1729,12 @@ async function renderDetail(){
       <div class="card-body" style="padding:.75rem 1.25rem">
         <div class="flex items-center gap-12">
           <div style="flex:1">
-            <div class="text-xs text-muted mb-4">Completion</div>
-            <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="text-xs text-muted mb-4">Completion
+              ${pct<100?`<span id="detail-pct-hint" style="margin-left:6px;color:var(--amber);font-size:10px">${getMissingItems(p)}</span>`:'<span style="margin-left:6px;color:var(--green);font-size:10px">✓ All complete</span>'}
+            </div>
+            <div class="progress-wrap"><div class="progress-fill" id="detail-pct-bar" style="width:${pct}%"></div></div>
           </div>
-          <div class="font-mono font-600 text-blue" style="font-size:20px">${pct}%</div>
+          <div class="font-mono font-600 text-blue" id="detail-pct-val" style="font-size:20px">${pct}%</div>
           <div class="flex gap-8">
             ${canEdit?`<button class="btn btn-ghost btn-sm" onclick="editProblem('${p.id}')">Edit Concern</button>`:''}
             ${canAdvance&&p.status==='new'?`<button class="btn btn-amber btn-sm" onclick="advanceStatus('${p.id}','cause-defined')">Mark Cause Done →</button>`:''}
@@ -1969,28 +2008,46 @@ async function saveConcernSection(id){
   p.impact=document.getElementById('d-impact').value;
   p.frequency=document.getElementById('d-freq').value;
   p.firstSeen=document.getElementById('d-firstseen').value;
-  try { await saveProblem(p); await addAuditEntry(p.id,'Concern section updated'); showNotif('Concern saved.','success'); updateBadges(); }
-  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-  window._activeDetailTab='tab-concern';
-  renderDetail();
+  try {
+    await saveProblem(p);
+    await addAuditEntry(p.id,'Concern section updated');
+    showNotif('Concern saved. ✓','success');
+    updateBadges();
+    refreshCompletionBar();
+  } catch(e){ showNotif('Save failed: '+e.message,'error'); }
 }
 
 async function saveCauseSection(id){
   const p=await getProblemWithDetails(id); if(!p) return;
-  p.cause={description:document.getElementById('d-cause').value,type:document.getElementById('d-causetype').value,tools:document.getElementById('d-causetool').value,evidence:document.getElementById('d-causeevidence').value};
-  try { await saveProblem(p); await addAuditEntry(p.id,'Cause section updated'); showNotif('Cause saved.','success'); }
-  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-  window._activeDetailTab='tab-cause';
-  renderDetail();
+  p.cause={
+    description:document.getElementById('d-cause').value,
+    type:document.getElementById('d-causetype').value,
+    tools:document.getElementById('d-causetool').value,
+    evidence:document.getElementById('d-causeevidence').value
+  };
+  try {
+    await saveProblem(p);
+    await addAuditEntry(p.id,'Cause section updated');
+    showNotif('Cause saved. ✓','success');
+    refreshCompletionBar();
+  } catch(e){ showNotif('Save failed: '+e.message,'error'); }
 }
 
 async function saveCMSection(id){
   const p=await getProblemWithDetails(id); if(!p) return;
-  p.countermeasure={description:document.getElementById('d-cm').value,type:document.getElementById('d-cmtype').value,owner:document.getElementById('d-cmowner').value,dueDate:document.getElementById('d-cmdue').value,status:document.getElementById('d-cmstatus').value};
-  try { await saveProblem(p); await addAuditEntry(p.id,'Countermeasure section updated'); showNotif('Countermeasure saved.','success'); }
-  catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-  window._activeDetailTab='tab-counter';
-  renderDetail();
+  p.countermeasure={
+    description:document.getElementById('d-cm').value,
+    type:document.getElementById('d-cmtype').value,
+    owner:document.getElementById('d-cmowner').value,
+    dueDate:document.getElementById('d-cmdue').value,
+    status:document.getElementById('d-cmstatus').value
+  };
+  try {
+    await saveProblem(p);
+    await addAuditEntry(p.id,'Countermeasure section updated');
+    showNotif('Countermeasure saved. ✓','success');
+    refreshCompletionBar();
+  } catch(e){ showNotif('Save failed: '+e.message,'error'); }
 }
 
 function editProblem(id){ editingProblemId=id; window._activeDetailTab='tab-concern'; goTo('create'); }
