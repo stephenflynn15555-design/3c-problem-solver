@@ -638,7 +638,7 @@ async function dbPost(table, body) {
   return Array.isArray(d)?d[0]:d;
 }
 
-async function dbPatch(table, matchKey, matchVal, body) {
+async function dbPatch(table, body, matchKey, matchVal) {
   const res = await fetch(SB_URL+'/rest/v1/'+table+'?'+matchKey+'=eq.'+encodeURIComponent(matchVal), {
     method:'PATCH', headers:_h(), body:JSON.stringify(body)
   });
@@ -1619,7 +1619,7 @@ function buildProblemTable(ps){
 }
 
 function calcProblemCompletion(p){
-  let score=0, max=10;
+  let score=0, max=11;
   if(p.title) score++;
   if(p.description) score++;
   if(p.status!=='new') score++;
@@ -1629,13 +1629,15 @@ function calcProblemCompletion(p){
   if(p.countermeasure&&p.countermeasure.description) score++;
   if(p.countermeasure&&p.countermeasure.owner) score++;
   if(p.countermeasure&&p.countermeasure.dueDate) score++;
-  // Use photoCount from DB if photos not loaded, else check arrays
-  const hasPhoto = (p.photoCount||0) > 0 ||
+  // Evidence photo (C2 or C3)
+  const hasEvidencePhoto = (p.photoCount||0) > 0 ||
     (p.concernPhotos||[]).length > 0 ||
     (p.causePhotos||[]).length > 0 ||
-    (p.causeStaffPhotos||[]).length > 0 ||
     (p.countermeasurePhotos||[]).length > 0;
-  if(hasPhoto) score++;
+  if(hasEvidencePhoto) score++;
+  // Staff using CI tools photo (required to close)
+  const hasStaffPhoto = (p.causeStaffPhotos||[]).length > 0;
+  if(hasStaffPhoto) score++;
   return Math.round(score/max*100);
 }
 
@@ -1783,7 +1785,7 @@ async function renderDetail(){
           <div class="photo-grid" id="cause-photos-grid"></div>
           ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause')"><span class="icon">📷</span><span>Add Evidence Photo</span></button>`:''}
 
-          <div class="form-section-title mt-16">Staff Using CI Tools</div>
+          <div class="form-section-title mt-16">Staff Using CI Tools <span style="color:var(--red);font-size:11px">★ Required to close</span></div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Photos showing team members actively using the analysis tool</div>
           <div class="photo-grid" id="cause-staff-photos-grid"></div>
           ${canEdit?`<button class="photo-add-btn mt-8" onclick="triggerPhoto('detail-cause-staff')"><span class="icon">📷</span><span>Add Staff Photo</span></button>`:''}
@@ -2009,13 +2011,29 @@ async function advanceStatus(id,newStatus){
 
 async function closeProblem(id){
   const p=await getProblemWithDetails(id); if(!p) return;
-  if(!(p.cause&&p.cause.description)){showNotif('Root cause must be defined before closing.','error');return;}
-  if(!(p.countermeasure&&p.countermeasure.description)){showNotif('Countermeasure must be defined before closing.','error');return;}
-  const hasEvidence=p.causePhotos.length||p.countermeasurePhotos.length;
-  if(!hasEvidence){showNotif('Evidence photo required before closing.','error');return;}
+  if(!(p.cause&&p.cause.description)){
+    showNotif('Root cause must be defined before closing.','error'); return;
+  }
+  if(!(p.countermeasure&&p.countermeasure.description)){
+    showNotif('Countermeasure must be defined before closing.','error'); return;
+  }
+  const hasEvidencePhoto = (p.causePhotos||[]).length > 0 || (p.countermeasurePhotos||[]).length > 0;
+  if(!hasEvidencePhoto){
+    showNotif('An evidence photo (C2 or C3) is required before closing.','error');
+    window._activeDetailTab='tab-cause'; renderDetail(); return;
+  }
+  const hasStaffPhoto = (p.causeStaffPhotos||[]).length > 0;
+  if(!hasStaffPhoto){
+    showNotif('A "Staff Using CI Tools" photo in C2 is required before closing.','error');
+    window._activeDetailTab='tab-cause'; renderDetail(); return;
+  }
   p.status='closed'; p.closedDate=Date.now();
-  try { await saveProblem(p); await addAuditEntry(id,'Problem closed by '+currentUser.name); showNotif('Problem closed. ✓','success'); updateBadges(); renderDetail(); }
-  catch(e){ showNotif('Error: '+e.message,'error'); }
+  try {
+    await saveProblem(p);
+    await addAuditEntry(id,'Problem closed by '+currentUser.name);
+    showNotif('Problem closed. ✓','success');
+    updateBadges(); renderDetail();
+  } catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 // LIGHTBOX
