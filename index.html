@@ -772,7 +772,8 @@ function _mapP(p) {
     concernPhotos:[], causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
     signoffs: p.signoffs || [],
     comments: p.comments || [],
-    escalation: p.escalation || null, // {reason, escalatedTo, escalatedBy, escalatedByName, ts}
+    escalation: p.escalation || null,
+    hasStaffPhoto: p.has_staff_photo || false, // {reason, escalatedTo, escalatedBy, escalatedByName, ts}
     photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
 }
@@ -923,6 +924,13 @@ async function deleteDetailPhoto(problemId, section, idx) {
       await dbDel('problem_photos','id',photos[idx].id).catch(()=>{});
       await addAuditEntry(problemId,'Photo removed from '+section);
     }
+    // If deleting a staff photo and none remain, clear the flag
+    if(section === 'cause-staff'){
+      const remaining = await dbGet('problem_photos',{problem_id:'eq.'+problemId,section:'eq.cause-staff'}).catch(()=>[]);
+      if(!remaining.length){
+        await dbPatch('problems',{has_staff_photo:false},'id',problemId).catch(()=>{});
+      }
+    }
     // Remove thumbnail from grid directly — no full re-render
     const gridMap = {'concern':'concern-photos-grid','cause':'cause-photos-grid','cause-staff':'cause-staff-photos-grid','countermeasure':'counter-photos-grid'};
     const grid = document.getElementById(gridMap[section]);
@@ -957,6 +965,10 @@ async function addDetailPhoto(section, src) {
     return;
   }
   await addAuditEntry(currentDetailId, 'Photo added to '+section);
+  // If this is a staff photo, set the flag on the problem so list view completion is accurate
+  if(section === 'cause-staff'){
+    await dbPatch('problems',{has_staff_photo:true},'id',currentDetailId).catch(()=>{});
+  }
   showNotif('Photo saved.','success');
 
   // Inject photo directly into the grid — no full page re-render so form data is preserved
@@ -1672,14 +1684,17 @@ function calcProblemCompletion(p){
   if(p.countermeasure&&p.countermeasure.description) score++;
   if(p.countermeasure&&p.countermeasure.owner) score++;
   if(p.countermeasure&&p.countermeasure.dueDate) score++;
-  // Evidence photo (C2 or C3)
+  // Evidence photo — use DB count (photoCount) OR loaded arrays
   const hasEvidencePhoto = (p.photoCount||0) > 0 ||
     (p.concernPhotos||[]).length > 0 ||
     (p.causePhotos||[]).length > 0 ||
-    (p.countermeasurePhotos||[]).length > 0;
+    (p.countermeasurePhotos||[]).length > 0 ||
+    (p.causeStaffPhotos||[]).length > 0;
   if(hasEvidencePhoto) score++;
-  // Staff using CI tools photo (required to close)
-  const hasStaffPhoto = (p.causeStaffPhotos||[]).length > 0;
+  // Staff CI tools photo — use dedicated flag OR loaded array
+  const hasStaffPhoto = p.hasStaffPhoto === true ||
+    p.has_staff_photo === true ||
+    (p.causeStaffPhotos||[]).length > 0;
   if(hasStaffPhoto) score++;
   return Math.round(score/max*100);
 }
@@ -1693,11 +1708,12 @@ function getMissingItems(p){
   if(!p.countermeasure?.description) missing.push('countermeasure');
   if(!p.countermeasure?.owner) missing.push('CM owner');
   if(!p.countermeasure?.dueDate) missing.push('CM due date');
-  const hasPhoto = (p.causePhotos||[]).length||(p.countermeasurePhotos||[]).length||(p.concernPhotos||[]).length;
+  const hasPhoto = (p.photoCount||0)>0 || (p.causePhotos||[]).length || (p.countermeasurePhotos||[]).length || (p.concernPhotos||[]).length || (p.causeStaffPhotos||[]).length;
   if(!hasPhoto) missing.push('evidence photo');
-  if(!(p.causeStaffPhotos||[]).length) missing.push('staff CI tools photo');
+  const hasStaff = p.hasStaffPhoto||p.has_staff_photo||(p.causeStaffPhotos||[]).length>0;
+  if(!hasStaff) missing.push('staff CI tools photo');
   if(!missing.length) return '';
-  return '— missing: '+missing.slice(0,3).join(', ')+(missing.length>3?' +'+( missing.length-3)+' more':'');
+  return '— missing: '+missing.slice(0,3).join(', ')+(missing.length>3?' +'+(missing.length-3)+' more':'');
 }
 
 async function refreshCompletionBar(){
