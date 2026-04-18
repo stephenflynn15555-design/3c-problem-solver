@@ -161,6 +161,7 @@ a{color:var(--blue);text-decoration:none;}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:500;}
 .pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .pill-new{background:#e0e7ff;color:#3730a3;}
+.pill-escalated{background:#f3e8ff;color:#7c3aed;border:1px solid #e9d5ff;}
 .pill-validated{background:var(--blue-bg);color:#1e40af;}
 .pill-cause{background:var(--amber-bg);color:#92400e;}
 .pill-counter{background:#fce7f3;color:#9d174d;}
@@ -771,6 +772,7 @@ function _mapP(p) {
     concernPhotos:[], causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
     signoffs: p.signoffs || [],
     comments: p.comments || [],
+    escalation: p.escalation || null, // {reason, escalatedTo, escalatedBy, escalatedByName, ts}
     photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
 }
@@ -1005,11 +1007,13 @@ async function nextProblemId(){ const ps=await getProblems(); return 'RPT-'+Stri
 const STATUS_FLOW = ['new','cause-defined','countermeasure-defined','closed'];
 const STATUS_LABELS = {
   'new':'New','cause-defined':'Cause Defined',
-  'countermeasure-defined':'Countermeasure Defined','closed':'Closed'
+  'countermeasure-defined':'Countermeasure Defined','closed':'Closed',
+  'escalated':'Escalated'
 };
 const STATUS_PILL = {
   'new':'pill-new','cause-defined':'pill-cause',
-  'countermeasure-defined':'pill-counter','closed':'pill-closed'
+  'countermeasure-defined':'pill-counter','closed':'pill-closed',
+  'escalated':'pill-escalated'
 };
 
 let currentUser = null;
@@ -1188,7 +1192,7 @@ function renderPage(page){
 
 async function updateBadges(){
   const ps = await getProblems();
-  const open = ps.filter(p=>p.status!=='closed').length;
+  const open = ps.filter(p=>p.status!=='closed'&&p.status!=='escalated').length;
   document.getElementById('open-badge').textContent=open;
   const actions = await getActions();
   const overdue = actions.filter(a=>a.status!=='complete' && a.dueDate && new Date(a.dueDate)<new Date()).length;
@@ -1204,10 +1208,11 @@ async function renderDashboard(){
   const visible = ps;
   const actions = await getActions();
   const today = new Date(); today.setHours(0,0,0,0);
-  const total=visible.length, open=visible.filter(p=>p.status!=='closed').length;
+  const total=visible.length, open=visible.filter(p=>p.status!=='closed'&&p.status!=='escalated').length;
   const closed=visible.filter(p=>p.status==='closed').length;
+  const escalatedCount=visible.filter(p=>p.status==='escalated').length;
   const overdue=actions.filter(a=>isActionOverdue(a)).length;
-  const high=visible.filter(p=>p.severity==='High'&&p.status!=='closed').length;
+  const high=visible.filter(p=>p.severity==='High'&&p.status!=='closed'&&p.status!=='escalated').length;
   const avgClose = calcAvgClose(visible);
   const recent = [...visible].sort((a,b)=>b.created-a.created).slice(0,5);
 
@@ -1228,6 +1233,7 @@ async function renderDashboard(){
       <div class="stat-card"><div class="stat-val stat-blue">${total}</div><div class="stat-label">Total Problems</div></div>
       <div class="stat-card"><div class="stat-val stat-amber">${open}</div><div class="stat-label">Open</div></div>
       <div class="stat-card"><div class="stat-val stat-green">${closed}</div><div class="stat-label">Closed</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#7c3aed">${escalatedCount}</div><div class="stat-label">Escalated</div></div>
       <div class="stat-card"><div class="stat-val stat-red">${overdue}</div><div class="stat-label">Overdue Actions</div></div>
       <div class="stat-card"><div class="stat-val stat-red">${high}</div><div class="stat-label">High Severity Open</div></div>
       <div class="stat-card"><div class="stat-val stat-blue">${avgClose}</div><div class="stat-label">Avg Days to Close</div></div>
@@ -1556,6 +1562,9 @@ async function renderProblems(){
   const ps=await getProblems();
   if(window._filterSev){ listFilter.sev=window._filterSev; window._filterSev=null; }
 
+  const active = filteredProblems(ps.filter(p=>p.status!=='escalated'));
+  const escalated = filteredProblems(ps.filter(p=>p.status==='escalated'));
+
   document.getElementById('page-problems').innerHTML=`
     <div class="flex gap-8 mb-16 flex-wrap">
       <div class="tabs" style="margin-bottom:0;flex:1;min-width:200px;">
@@ -1576,9 +1585,23 @@ async function renderProblems(){
       <input type="text" placeholder="Search…" value="${listFilter.search}" oninput="listFilter.search=this.value;renderProblems()" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid var(--border);background:#fff;font-size:13px;min-width:160px;">
       <button class="btn btn-primary btn-sm" onclick="goTo('create')">+ New</button>
     </div>
-    <div class="card card-body-p0">
-      ${buildProblemTable(filteredProblems(ps))}
+
+    <div class="card card-body-p0 mb-16">
+      ${buildProblemTable(active)}
     </div>
+
+    ${escalated.length?`
+    <div style="margin-top:1.5rem">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:600;color:#7c3aed">↑ Escalated Problems</span>
+        <span style="background:#f3e8ff;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px">${escalated.length}</span>
+        <span style="font-size:12px;color:var(--text2)">— no longer tracked in active list</span>
+      </div>
+      <div class="card card-body-p0" style="opacity:0.65">
+        ${buildEscalatedTable(escalated)}
+      </div>
+    </div>`:''}
+
     <div style="margin-top:1rem;display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
     </div>
@@ -1598,6 +1621,21 @@ function filteredProblems(ps){
     list=list.filter(p=>(p.title+p.dept+p.problemId+p.category).toLowerCase().includes(q));
   }
   return list.sort((a,b)=>b.created-a.created);
+}
+
+function buildEscalatedTable(ps){
+  if(!ps.length) return '';
+  return `<table class="data-table"><thead><tr>
+    <th>ID</th><th>Title</th><th>Dept</th><th>Escalated To</th><th>Reason</th><th>Date</th>
+  </tr></thead><tbody>
+  ${ps.map(p=>`<tr onclick="openDetail('${p.id}')" style="cursor:pointer">
+    <td><span class="font-mono text-xs" style="color:#7c3aed">${p.problemId}</span></td>
+    <td><div style="font-weight:500;color:var(--text2)">${esc(p.title)}</div></td>
+    <td class="text-sm text-muted">${esc(p.dept||'')}</td>
+    <td class="text-sm"><span style="color:#7c3aed;font-weight:500">${esc(p.escalation?.escalatedTo||'—')}</span></td>
+    <td class="text-sm text-muted" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.escalation?.reason||'—')}</td>
+    <td class="text-xs text-muted">${p.escalation?.ts?new Date(p.escalation.ts).toLocaleDateString('en-IE'):'—'}</td>
+  </tr>`).join('')}</tbody></table>`;
 }
 
 function buildProblemTable(ps){
@@ -1730,8 +1768,30 @@ async function renderDetail(){
       <div class="flex gap-8 ml-auto">
         <button class="btn btn-ghost btn-sm" onclick="printA3Report('${p.id}')" title="Print A3 Report">🖨 Print A3</button>
         <button class="btn btn-ghost btn-sm" onclick="showQRCode('${p.id}','${p.problemId}')" title="Show QR Code">⊞ QR Code</button>
+        ${['manager','admin'].includes(currentUser.role) && p.status!=='closed' && p.status!=='escalated'
+          ? `<button class="btn btn-sm" style="background:#f3e8ff;color:#7c3aed;border:1px solid #e9d5ff" onclick="openEscalateModal('${p.id}')">↑ Escalate</button>`:''}
+        ${p.status==='escalated' && ['manager','admin'].includes(currentUser.role)
+          ? `<button class="btn btn-ghost btn-sm" onclick="deEscalateProblem('${p.id}')">↩ De-escalate</button>`:''}
       </div>
     </div>
+
+    ${p.status==='escalated'&&p.escalation?`
+    <div class="card mb-16" style="border-left:4px solid #7c3aed;background:#faf5ff">
+      <div class="card-body" style="padding:.75rem 1.25rem">
+        <div class="flex items-center gap-12">
+          <span style="font-size:20px">↑</span>
+          <div>
+            <div style="font-weight:600;color:#7c3aed">Escalated — no longer tracked in active list</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">
+              <strong>Reason:</strong> ${esc(p.escalation.reason)} ·
+              <strong>To:</strong> ${esc(p.escalation.escalatedTo)} ·
+              <strong>By:</strong> ${esc(p.escalation.escalatedByName)} ·
+              ${new Date(p.escalation.ts).toLocaleDateString('en-IE')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`:''}
 
     ${buildStepper(p.status)}
 
@@ -2320,7 +2380,7 @@ async function renderAnalytics(){
 
   // Ageing buckets
   const buckets={'0-7d':0,'8-14d':0,'15-30d':0,'>30d':0};
-  ps.filter(p=>p.status!=='closed').forEach(p=>{
+  ps.filter(p=>p.status!=='closed'&&p.status!=='escalated').forEach(p=>{
     const d=Math.floor((Date.now()-p.created)/86400000);
     if(d<=7) buckets['0-7d']++; else if(d<=14) buckets['8-14d']++;
     else if(d<=30) buckets['15-30d']++; else buckets['>30d']++;
@@ -3023,7 +3083,7 @@ async function renderProfile(){
     </div>
     <div class="stat-grid mb-16">
       <div class="stat-card"><div class="stat-val stat-blue">${mine.length}</div><div class="stat-label">My Problems</div></div>
-      <div class="stat-card"><div class="stat-val stat-amber">${mine.filter(p=>p.status!=='closed').length}</div><div class="stat-label">Open</div></div>
+      <div class="stat-card"><div class="stat-val stat-amber">${mine.filter(p=>p.status!=='closed'&&p.status!=='escalated').length}</div><div class="stat-label">Open</div></div>
       <div class="stat-card"><div class="stat-val stat-green">${mine.filter(p=>p.status==='closed').length}</div><div class="stat-label">Closed</div></div>
     </div>
     <div class="card">
@@ -3190,9 +3250,9 @@ async function exportPDF(){
   </div>
   <div class="summary">
     <div class="sum-item"><div class="sum-val" style="color:#1a5fb4">${ps.length}</div><div class="sum-label">Total</div></div>
-    <div class="sum-item"><div class="sum-val" style="color:#b45309">${ps.filter(p=>p.status!=='closed').length}</div><div class="sum-label">Open</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#b45309">${ps.filter(p=>p.status!=='closed'&&p.status!=='escalated').length}</div><div class="sum-label">Open</div></div>
     <div class="sum-item"><div class="sum-val" style="color:#166534">${ps.filter(p=>p.status==='closed').length}</div><div class="sum-label">Closed</div></div>
-    <div class="sum-item"><div class="sum-val" style="color:#c0392b">${ps.filter(p=>p.severity==='High'&&p.status!=='closed').length}</div><div class="sum-label">High Open</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#c0392b">${ps.filter(p=>p.severity==='High'&&p.status!=='closed'&&p.status!=='escalated').length}</div><div class="sum-label">High Open</div></div>
   </div>
   ${ps.map(p=>{
     const pActions=actions.filter(a=>a.problemId===p.id);
@@ -3872,6 +3932,78 @@ async function saveMyPassword(){
 }
 
 // ══════════════════════════════════════════════
+// ESCALATION
+// ══════════════════════════════════════════════
+async function openEscalateModal(problemId){
+  const users = await getUsers();
+  const managers = users.filter(u=>['manager','admin'].includes(u.role)&&u.id!==currentUser.id);
+  document.getElementById('modal-title').textContent='Escalate Problem';
+  document.getElementById('modal-body').innerHTML=`
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:var(--r);padding:12px 14px;margin-bottom:16px;font-size:13px;color:#7c3aed">
+      Escalating marks this problem as handled outside the 3C system. It will be removed from the active list but remain visible in a separate Escalated section.
+    </div>
+    <div class="field mb-12">
+      <label>Reason for Escalation *</label>
+      <textarea id="esc-reason" placeholder="Why is this being escalated? (e.g. Requires senior management decision, external supplier issue, regulatory matter…)" style="min-height:80px"></textarea>
+    </div>
+    <div class="field">
+      <label>Escalated To *</label>
+      <input id="esc-to" type="text" placeholder="Name or role this is being escalated to (e.g. Plant Manager, Quality Director…)">
+    </div>`;
+  document.getElementById('modal-footer').innerHTML=`
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="confirmEscalate('${problemId}')">↑ Confirm Escalation</button>`;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function confirmEscalate(problemId){
+  const reason = document.getElementById('esc-reason')?.value.trim();
+  const escalatedTo = document.getElementById('esc-to')?.value.trim();
+  if(!reason){ showNotif('Reason is required.','error'); return; }
+  if(!escalatedTo){ showNotif('Please specify who this is escalated to.','error'); return; }
+  const p = await getProblemWithDetails(problemId);
+  if(!p) return;
+  const prevStatus = p.status;
+  p.status = 'escalated';
+  p.escalation = {
+    reason,
+    escalatedTo,
+    escalatedBy: currentUser.id,
+    escalatedByName: currentUser.name,
+    previousStatus: prevStatus,
+    ts: Date.now()
+  };
+  try {
+    await dbPatch('problems',{
+      status:'escalated',
+      escalation: JSON.stringify(p.escalation)
+    },'id',problemId);
+    await addAuditEntry(problemId,`Escalated to ${escalatedTo} by ${currentUser.name}: ${reason}`);
+    closeModal();
+    showNotif('Problem escalated. Removed from active tracking.','success');
+    updateBadges();
+    renderDetail();
+  } catch(e){ showNotif('Failed: '+e.message,'error'); }
+}
+
+async function deEscalateProblem(problemId){
+  if(!confirm('Return this problem to active tracking?')) return;
+  const p = await getProblemWithDetails(problemId);
+  if(!p) return;
+  const restoreStatus = p.escalation?.previousStatus || 'new';
+  try {
+    await dbPatch('problems',{
+      status: restoreStatus,
+      escalation: null
+    },'id',problemId);
+    await addAuditEntry(problemId,`De-escalated by ${currentUser.name} — returned to active tracking`);
+    showNotif('Problem returned to active tracking.','success');
+    updateBadges();
+    renderDetail();
+  } catch(e){ showNotif('Failed: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════
 // COMMENTS
 // ══════════════════════════════════════════════
 async function addComment(problemId){
@@ -4163,7 +4295,7 @@ async function renderTVMode(){
   const ps = await getProblems();
   const actions = await getActions();
   const today = new Date(); today.setHours(0,0,0,0);
-  const open = ps.filter(p=>p.status!=='closed');
+  const open = ps.filter(p=>p.status!=='closed'&&p.status!=='escalated');
   const high = open.filter(p=>p.severity==='High');
   const overdue = actions.filter(a=>isActionOverdue(a));
   const closed7 = ps.filter(p=>p.status==='closed'&&p.closedDate&&(Date.now()-p.closedDate)<7*86400000);
