@@ -1169,18 +1169,15 @@ function goTo(page){
   document.getElementById('topbar-sub').textContent = new Date().toLocaleDateString('en-IE',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 }
 
-let _renderingDetail = false;
+let _renderToken = 0;
 
 function renderPage(page){
   if(page==='dashboard') renderDashboard();
   else if(page==='create') renderCreate();
   else if(page==='problems') renderProblems();
   else if(page==='detail'){
-    // Show loading immediately, then render
     const el = document.getElementById('page-detail');
-    if(el && !_renderingDetail){
-      el.innerHTML='<div style="padding:2rem;display:flex;align-items:center;gap:12px;color:var(--text2)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div>Loading…</div>';
-    }
+    if(el) el.innerHTML='<div style="padding:2rem;display:flex;align-items:center;gap:12px;color:var(--text2)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div>Loading…</div>';
     renderDetail();
   }
   else if(page==='actions') renderActions();
@@ -1640,8 +1637,9 @@ function buildEscalatedTable(ps){
 
 function buildProblemTable(ps){
   if(!ps.length) return '<div class="card-body text-muted text-sm">No problems match the current filters.</div>';
+  const isAdmin = currentUser?.role==='admin';
   return `<table class="data-table"><thead><tr>
-    <th>ID</th><th>Title</th><th>Dept</th><th>Category</th><th>Severity</th><th>Status</th><th>Age</th><th>Completion</th>
+    <th>ID</th><th>Title</th><th>Dept</th><th>Category</th><th>Severity</th><th>Status</th><th>Age</th><th>Completion</th>${isAdmin?'<th></th>':''}
   </tr></thead><tbody>
   ${ps.map(p=>{
     const pct=calcProblemCompletion(p);
@@ -1652,12 +1650,13 @@ function buildProblemTable(ps){
       <td class="text-sm">${esc(p.dept||'')}</td>
       <td><span class="pill ${catClass(p.category)}">${p.category}</span></td>
       <td><span class="pill ${sevClass(p.severity)}">${p.severity}</span></td>
-      <td><span class="pill ${STATUS_PILL[p.status]}">${STATUS_LABELS[p.status]}</span></td>
+      <td><span class="pill ${STATUS_PILL[p.status]||'pill-new'}">${STATUS_LABELS[p.status]||p.status}</span></td>
       <td>${ageChip(p)}</td>
       <td><div style="display:flex;align-items:center;gap:8px;">
         <div class="progress-wrap" style="width:70px"><div class="progress-fill" style="width:${pct}%"></div></div>
         <span class="text-xs font-mono text-muted">${pct}%</span>
       </div></td>
+      ${isAdmin?`<td onclick="event.stopPropagation()"><button class="btn btn-sm" style="background:var(--red-bg);color:var(--red);border:1px solid #fca5a5;padding:3px 8px;font-size:11px" onclick="deleteProblem('`+p.id+`','`+p.problemId+`')">🗑</button></td>`:''}
     </tr>`;
   }).join('')}</tbody></table>`;
 }
@@ -1723,24 +1722,24 @@ async function refreshCompletionBar(){
 // ══════════════════════════════════════════════
 // PROBLEM DETAIL (3C)
 // ══════════════════════════════════════════════
+
 async function renderDetail(){
   if(!currentDetailId){
     document.getElementById('page-detail').innerHTML='<div class="text-muted" style="padding:2rem">No problem selected.</div>';
     return;
   }
-  if(_renderingDetail) return; // prevent double-render
-  _renderingDetail = true;
+  const myToken = ++_renderToken; // claim this render
   let p = null, errMsg = null;
   try { p = await getProblemWithDetails(currentDetailId); }
   catch(e) { errMsg = e.message; }
-  finally { _renderingDetail = false; }
+  if(myToken !== _renderToken) return; // superseded by a newer render — bail out
   if(!p){
     document.getElementById('page-detail').innerHTML=`
       <div style="padding:2rem">
         <div style="color:var(--red);font-weight:500;margin-bottom:.5rem">Could not load problem</div>
         ${errMsg?`<div style="background:var(--red-bg);border-radius:var(--r);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:1rem;font-family:var(--mono)">${errMsg}</div>`:''}
         <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">
-          Run this SQL in Supabase → SQL Editor to fix permissions:<br>
+          If this keeps happening, run in Supabase → SQL Editor:<br>
           <code style="background:var(--surface2);padding:4px 8px;border-radius:4px;font-size:12px">GRANT SELECT ON public.problems TO authenticated;</code>
         </div>
         <div style="display:flex;gap:8px">
@@ -1772,6 +1771,8 @@ async function renderDetail(){
           ? `<button class="btn btn-sm" style="background:#f3e8ff;color:#7c3aed;border:1px solid #e9d5ff" onclick="openEscalateModal('${p.id}')">↑ Escalate</button>`:''}
         ${p.status==='escalated' && ['manager','admin'].includes(currentUser.role)
           ? `<button class="btn btn-ghost btn-sm" onclick="deEscalateProblem('${p.id}')">↩ De-escalate</button>`:''}
+        ${currentUser.role==='admin'
+          ? `<button class="btn btn-sm" style="background:var(--red-bg);color:var(--red);border:1px solid #fca5a5" onclick="deleteProblem('${p.id}','${p.problemId}')">🗑 Delete</button>`:''}
       </div>
     </div>
 
@@ -3929,6 +3930,31 @@ async function saveMyPassword(){
   if(newP!==conf){showNotif('Passwords do not match.','error');return;}
   try { await sbUpdatePassword(newP); closeModal(); showNotif('Password updated.','success'); }
   catch(e){ showNotif('Error: '+e.message,'error'); }
+}
+
+async function deleteProblem(problemId, problemRef){
+  const confirmed = confirm(`Delete ${problemRef}?\n\nThis will permanently remove the problem, all its actions, photos and audit trail. This cannot be undone.`);
+  if(!confirmed) return;
+  // Double-confirm for safety
+  const confirm2 = prompt(`Type the problem ID to confirm deletion:\n(expected: ${problemRef})`);
+  if(confirm2?.trim().toUpperCase() !== problemRef?.toUpperCase()){
+    showNotif('Deletion cancelled — ID did not match.', 'error'); return;
+  }
+  showNotif('Deleting…','');
+  try {
+    // Delete related records first (cascade should handle most, but be explicit)
+    await dbDel('audit_log','problem_id',problemId).catch(()=>{});
+    await dbDel('actions','problem_id',problemId).catch(()=>{});
+    await dbDel('problem_photos','problem_id',problemId).catch(()=>{});
+    // Delete the problem itself
+    await dbDel('problems','id',problemId);
+    currentDetailId = null;
+    await updateBadges();
+    showNotif(`${problemRef} deleted permanently.`, 'success');
+    goTo('problems');
+  } catch(e){
+    showNotif('Delete failed: '+e.message, 'error');
+  }
 }
 
 // ══════════════════════════════════════════════
