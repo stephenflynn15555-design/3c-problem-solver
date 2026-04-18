@@ -445,7 +445,7 @@ a{color:var(--blue);text-decoration:none;}
     <div class="login-card">
       <div class="login-brand">
         <div class="login-brand-icon">3C</div>
-        <div><div class="login-brand-name">Problem Solver</div><div class="login-brand-sub">Lean / Continuous Improvement</div></div>
+        <div><div class="login-brand-name">3C Problem Solver</div><div class="login-brand-sub">Lean / Continuous Improvement</div></div>
       </div>
       <div class="login-title">Sign in</div>
       <div class="login-sub">Enter your username and password.</div>
@@ -453,12 +453,7 @@ a{color:var(--blue);text-decoration:none;}
       <div class="field"><label>Username</label><input type="text" id="l-email" placeholder="e.g. sflynn" autocomplete="username" style="text-transform:lowercase"></div>
       <div class="field"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
       <button class="btn btn-primary btn-full btn-lg" onclick="doLogin()">Sign in →</button>
-      <div class="login-demo">
-        Demo accounts:<br>
-        <strong>aalexander</strong> / admin123 → Admin<br>
-        <strong>mmorgan</strong> / mgr123 → Manager<br>
-        <strong>eevans</strong> / eng123 → Engineer<br>
-        <strong>oflanagan</strong> / op123 → Operator
+      <div class="login-demo" style="display:none">
       </div>
     </div>
   </div>
@@ -470,7 +465,7 @@ a{color:var(--blue);text-decoration:none;}
   <div class="sidebar">
     <div class="sidebar-brand">
       <div class="sidebar-brand-icon">3C</div>
-      <div><div class="sidebar-brand-text">Problem Solver</div><div class="sidebar-brand-sub">v2.0</div></div>
+      <div><div class="sidebar-brand-text">3C Problem Solver</div><div class="sidebar-brand-sub">v2.0</div></div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-section">Main</div>
@@ -1170,11 +1165,20 @@ function goTo(page){
   document.getElementById('topbar-sub').textContent = new Date().toLocaleDateString('en-IE',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 }
 
+let _renderingDetail = false;
+
 function renderPage(page){
   if(page==='dashboard') renderDashboard();
   else if(page==='create') renderCreate();
   else if(page==='problems') renderProblems();
-  else if(page==='detail') renderDetail();
+  else if(page==='detail'){
+    // Show loading immediately, then render
+    const el = document.getElementById('page-detail');
+    if(el && !_renderingDetail){
+      el.innerHTML='<div style="padding:2rem;display:flex;align-items:center;gap:12px;color:var(--text2)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div>Loading…</div>';
+    }
+    renderDetail();
+  }
   else if(page==='actions') renderActions();
   else if(page==='analytics') renderAnalytics();
   else if(page==='powerbi') renderPowerBI();
@@ -1682,10 +1686,16 @@ async function refreshCompletionBar(){
 // PROBLEM DETAIL (3C)
 // ══════════════════════════════════════════════
 async function renderDetail(){
-  if(!currentDetailId){ document.getElementById('page-detail').innerHTML='<div class="text-muted" style="padding:2rem">No problem selected.</div>'; return; }
+  if(!currentDetailId){
+    document.getElementById('page-detail').innerHTML='<div class="text-muted" style="padding:2rem">No problem selected.</div>';
+    return;
+  }
+  if(_renderingDetail) return; // prevent double-render
+  _renderingDetail = true;
   let p = null, errMsg = null;
   try { p = await getProblemWithDetails(currentDetailId); }
   catch(e) { errMsg = e.message; }
+  finally { _renderingDetail = false; }
   if(!p){
     document.getElementById('page-detail').innerHTML=`
       <div style="padding:2rem">
@@ -1730,7 +1740,7 @@ async function renderDetail(){
         <div class="flex items-center gap-12">
           <div style="flex:1">
             <div class="text-xs text-muted mb-4">Completion
-              ${pct<100?`<span id="detail-pct-hint" style="margin-left:6px;color:var(--amber);font-size:10px">${getMissingItems(p)}</span>`:'<span style="margin-left:6px;color:var(--green);font-size:10px">✓ All complete</span>'}
+              <span id="detail-pct-hint" style="margin-left:6px;font-size:10px;color:${pct<100?'var(--amber)':'var(--green)'}">${pct<100?getMissingItems(p):'✓ All complete'}</span>
             </div>
             <div class="progress-wrap"><div class="progress-fill" id="detail-pct-bar" style="width:${pct}%"></div></div>
           </div>
@@ -2119,9 +2129,10 @@ function closeLightbox(){
 
 // Reset photo cache when leaving detail page
 function openDetail(id){
-  currentDetailId=id;
-  window._activeDetailTab='tab-concern';
-  window._detailPhotoCache={};
+  if(!id){ console.warn('openDetail called with no id'); return; }
+  currentDetailId = id;
+  window._activeDetailTab = 'tab-concern';
+  window._detailPhotoCache = {};
   goTo('detail');
 }
 
