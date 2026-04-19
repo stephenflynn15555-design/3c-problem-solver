@@ -876,9 +876,9 @@ async function getProblemWithDetails(id) {
         else if (ph.section==='countermeasure') p.countermeasurePhotos.push(src);
       }
     } catch(e){ console.warn('Photos fetch error:', e.message); }
-    // audit
+    // audit — limit to 50 most recent to avoid timeout
     try {
-      const audit = await dbGet('audit_log', {problem_id:'eq.'+id, order:'created_at.desc'});
+      const audit = await dbGet('audit_log', {problem_id:'eq.'+id, order:'created_at.desc', limit:50});
       p.audit = audit.map(a=>({action:a.action,by:a.performed_by_name,ts:new Date(a.created_at).getTime()}));
     } catch(e){ console.warn('Audit fetch error:', e.message); }
     return p;
@@ -1181,7 +1181,7 @@ function goTo(page){
   document.getElementById('topbar-sub').textContent = new Date().toLocaleDateString('en-IE',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 }
 
-let _renderToken = 0;
+let _renderingPage = null;
 
 function renderPage(page){
   if(page==='dashboard') renderDashboard();
@@ -1744,11 +1744,18 @@ async function renderDetail(){
     document.getElementById('page-detail').innerHTML='<div class="text-muted" style="padding:2rem">No problem selected.</div>';
     return;
   }
-  const myToken = ++_renderToken; // claim this render
+  const renderingId = currentDetailId; // snapshot which problem we're loading
   let p = null, errMsg = null;
-  try { p = await getProblemWithDetails(currentDetailId); }
+  try { p = await getProblemWithDetails(renderingId); }
   catch(e) { errMsg = e.message; }
-  if(myToken !== _renderToken) return; // superseded by a newer render — bail out
+  // If the user navigated to a different problem while loading, abort silently
+  // but only if we're no longer on the detail page at all
+  if(!document.getElementById('page-detail')?.classList.contains('active')) return;
+  // If they clicked a different problem, re-render with the new one
+  if(currentDetailId !== renderingId){
+    renderDetail();
+    return;
+  }
   if(!p){
     document.getElementById('page-detail').innerHTML=`
       <div style="padding:2rem">
