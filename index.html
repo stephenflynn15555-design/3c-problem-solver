@@ -770,9 +770,9 @@ function _mapP(p) {
     created:p.created_at?new Date(p.created_at).getTime():(p.created||Date.now()),
     updated:p.updated_at?new Date(p.updated_at).getTime():(p.updated||Date.now()),
     concernPhotos:[], causePhotos:[], causeStaffPhotos:[], countermeasurePhotos:[], audit:[],
-    signoffs: p.signoffs || [],
-    comments: p.comments || [],
-    escalation: p.escalation || null,
+    signoffs: typeof p.signoffs === 'string' ? JSON.parse(p.signoffs||'[]') : (p.signoffs||[]),
+    comments: typeof p.comments === 'string' ? JSON.parse(p.comments||'[]') : (p.comments||[]),
+    escalation: typeof p.escalation === 'string' ? JSON.parse(p.escalation||'null') : (p.escalation||null),
     hasStaffPhoto: p.has_staff_photo || false, // {reason, escalatedTo, escalatedBy, escalatedByName, ts}
     photoCount:p.photo_count||0, actionCount:p.action_count||0,
   };
@@ -780,14 +780,16 @@ function _mapP(p) {
 
 async function getProblems() {
   try {
-    // Use v_problems view to get photo_count, action_count etc for accurate completion %
-    let rows;
+    // Query problems table directly — v_problems view may not include has_staff_photo
+    // Get photo counts via a separate lightweight query
+    const rows = await dbGet('problems', {order:'created_at.desc'});
+    // Try to get photo counts from the view and merge them in
     try {
-      rows = await dbGet('v_problems', {order:'created_at.desc'});
-    } catch(e) {
-      // Fall back to direct table if view not accessible
-      rows = await dbGet('problems', {order:'created_at.desc'});
-    }
+      const view = await dbGet('v_problems', {order:'created_at.desc', select:'id,photo_count,action_count'});
+      const countMap = {};
+      view.forEach(v=>{ countMap[v.id]={photo_count:v.photo_count||0,action_count:v.action_count||0}; });
+      rows.forEach(r=>{ if(countMap[r.id]){ r.photo_count=countMap[r.id].photo_count; r.action_count=countMap[r.id].action_count; }});
+    } catch(e){ /* view not available — counts will be 0, completion still works via has_staff_photo */ }
     const m = rows.map(_mapP); sc('problems',m); return m;
   } catch(e) { return _c.problems; }
 }
@@ -1548,12 +1550,13 @@ async function submitConcern(){
       currentDetailId = saved.id || p.id;
       await addAuditEntry(currentDetailId,'Concern created by '+currentUser.name);
       for(const src of window._createPhotos) await uploadPhoto(currentDetailId,'concern',src);
+      if(sev==='High'){
+        showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
+        notifyHighSeverity({...p, problemId: saved.problemId||p.problemId}).catch(()=>{});
+      } else {
+        showNotif('Concern logged.','success');
+      }
     } catch(e){ showNotif('Save failed: '+e.message,'error'); return; }
-    if(sev==='High'){
-      showNotif('🚨 High Severity — escalated to Manager. Containment required within 24h.','warning');
-      notifyHighSeverity({...p, problemId: saved.problemId||p.problemId}).catch(()=>{});
-    }
-    else showNotif('Concern logged.','success');
     window._createPhotos=[];
     updateBadges();
     goTo('detail');
@@ -1773,8 +1776,8 @@ async function renderDetail(){
     return;
   }
 
-  const canEdit = p.status !== 'closed';
-  const canAdvance = p.status !== 'closed';
+  const canEdit = p.status !== 'closed' && p.status !== 'escalated';
+  const canAdvance = p.status !== 'closed' && p.status !== 'escalated';
   const canClose = ['admin','manager','engineer'].includes(currentUser.role);
   const canReopen = ['admin','manager','engineer'].includes(currentUser.role);
   const pct=calcProblemCompletion(p);
@@ -2154,10 +2157,13 @@ async function reopenProblem(id){
 }
 
 async function advanceStatus(id,newStatus){
-  const p=await getProblemWithDetails(id); if(!p) return;
-  p.status=newStatus;
-  try { await saveProblem(p); await addAuditEntry(id,'Status → '+STATUS_LABELS[newStatus]); showNotif('Status updated.','success'); updateBadges(); renderDetail(); }
-  catch(e){ showNotif('Error: '+e.message,'error'); }
+  try {
+    await dbPatch('problems',{status:newStatus},'id',id);
+    await addAuditEntry(id,'Status → '+STATUS_LABELS[newStatus]);
+    showNotif('Status updated.','success');
+    updateBadges();
+    renderDetail();
+  } catch(e){ showNotif('Error: '+e.message,'error'); }
 }
 
 async function closeProblem(id){
