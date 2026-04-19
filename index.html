@@ -3353,10 +3353,11 @@ async function exportPDF(){
 function getPBIConfig(){ return JSON.parse(localStorage.getItem('3c_pbi_config')||'{}'); }
 function savePBIConfig(c){ localStorage.setItem('3c_pbi_config',JSON.stringify(c)); }
 
-function renderPowerBI(){
+async function renderPowerBI(){
   const cfg = getPBIConfig();
   const isConnected = !!(cfg.tenantId && cfg.clientId && cfg.workspaceId && cfg.reportId && cfg.embedToken);
   const activeTab = window._pbiTab || 'export';
+  const datasets = await buildPBIDatasets();
 
   document.getElementById('page-powerbi').innerHTML=`
     <div class="pbi-status ${isConnected?'connected':'disconnected'}">
@@ -3374,7 +3375,7 @@ function renderPowerBI(){
     </div>
 
     <div id="pbi-panel-export" class="${activeTab==='export'?'':'hidden'}">
-      ${renderPBIExportPanel()}
+      ${renderPBIExportPanel(datasets)}
     </div>
     <div id="pbi-panel-setup" class="${activeTab==='setup'?'':'hidden'}">
       ${renderPBISetupGuide()}
@@ -3402,8 +3403,8 @@ function pbiTab(tab){
 }
 
 // ── EXPORT PANEL ──
-function renderPBIExportPanel(){
-  const datasets = buildPBIDatasets();
+function renderPBIExportPanel(datasets){
+  if(!datasets||!Array.isArray(datasets)) datasets=[];
   return`
     <div class="card mb-16">
       <div class="card-header">
